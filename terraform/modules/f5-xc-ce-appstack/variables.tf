@@ -16,7 +16,7 @@ variable "vm_name" {
 }
 
 variable "vm_size" {
-  description = "Size of the CE VM"
+  description = "Size of the CE VM (minimum Standard_D8s_v3: 8 vCPUs, 32 GB RAM)"
   type        = string
   default     = "Standard_D8s_v3"
 }
@@ -35,6 +35,29 @@ variable "registration_token" {
 variable "ssh_public_key" {
   description = "SSH public key for CE access"
   type        = string
+}
+
+variable "lb_backend_pool_id" {
+  description = "ID of the load balancer backend pool"
+  type        = string
+}
+
+variable "availability_zone" {
+  description = "Availability zone for VM deployment (1, 2, or 3)"
+  type        = string
+  default     = "1"
+}
+
+variable "enable_accelerated_networking" {
+  description = "Enable accelerated networking for better performance"
+  type        = bool
+  default     = true
+}
+
+variable "admin_username" {
+  description = "Admin username for CE VM"
+  type        = string
+  default     = "admin"
 }
 
 variable "tags" {

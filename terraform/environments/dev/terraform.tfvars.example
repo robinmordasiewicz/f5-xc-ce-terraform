@@ -3,7 +3,7 @@
 # WARNING: terraform.tfvars is gitignored - never commit it with secrets
 
 # Azure Configuration
-# -----------------
+# -------------------
 
 # Azure region for resource deployment
 # See: https://azure.microsoft.com/en-us/explore/global-infrastructure/geographies/
@@ -12,96 +12,93 @@ azure_region = "eastus"
 # Resource group name for all infrastructure
 resource_group_name = "xc-ce-dev-rg"
 
-# Common tags applied to all resources
-common_tags = {
-  environment = "dev"
-  project     = "f5-xc-ce-terraform"
-  managed_by  = "terraform"
-  cost_center = "infrastructure"
-}
+# Prefix for all resource names
+prefix = "xc-ce-dev"
 
 # Hub VNET Configuration
 # ----------------------
 
-# Hub VNET name and address space
-hub_vnet_name    = "hub-vnet-dev"
-hub_address_space = ["10.0.0.0/16"]
+# Hub VNET address space (where CE AppStack NVAs reside)
+hub_vnet_address_space = ["10.0.0.0/16"]
 
-# NVA subnet for CE AppStack instances (minimum /26)
-nva_subnet_name          = "nva-subnet"
-nva_subnet_address_prefix = "10.0.1.0/26"
+# NVA subnet for CE AppStack instances (minimum /26 for CE requirements)
+hub_nva_subnet_prefix = "10.0.1.0/26"
 
 # Management subnet for operational access
-mgmt_subnet_name          = "management-subnet"
-mgmt_subnet_address_prefix = "10.0.2.0/24"
+hub_mgmt_subnet_prefix = "10.0.2.0/24"
 
 # Spoke VNET Configuration
 # ------------------------
 
-# Spoke VNET name and address space
-spoke_vnet_name    = "spoke-vnet-dev"
-spoke_address_space = ["10.1.0.0/16"]
+# Spoke VNET address space (workload networks)
+spoke_vnet_address_space = ["10.1.0.0/16"]
 
-# Workload subnet for CE K8s cluster
-workload_subnet_name          = "workload-subnet"
-workload_subnet_address_prefix = "10.1.1.0/24"
-
-# F5 XC Customer Edge Configuration
-# ---------------------------------
-
-# CE site name (must be unique within F5 XC tenant)
-# Pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ (max 64 chars)
-ce_site_name = "dev-ce-site"
-
-# F5 XC tenant name (your F5 XC console URL: <tenant>.console.ves.volterra.io)
-f5_xc_tenant = "your-tenant"
-
-# F5 XC namespace (typically "system" for CE sites)
-f5_xc_namespace = "system"
-
-# F5 XC API token (set via environment variable or GitHub secret)
-# DO NOT hardcode here - use:
-# export TF_VAR_f5_xc_api_token="your-token"
-# OR in GitHub Actions: ${{ secrets.F5_XC_API_TOKEN }}
-# f5_xc_api_token = "CHANGE_ME_USE_ENV_VAR"
-
-# Azure VM Configuration for CE
-# -----------------------------
-
-# VM size for CE instances (minimum: 8 vCPUs, 32 GB RAM)
-# Recommended: Standard_D8s_v3, Standard_E8s_v3
-ce_vm_size = "Standard_D8s_v3"
-
-# Number of CE AppStack instances in hub (2 for HA)
-ce_appstack_count = 2
-
-# Number of CE K8s instances in spoke
-ce_k8s_count = 1
-
-# SSH public key for CE instance access
-# Generate with: ssh-keygen -t rsa -b 4096 -f ~/.ssh/ce-key
-ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC... your-public-key-here"
+# Workload subnet
+spoke_workload_subnet_prefix = "10.1.1.0/24"
 
 # Load Balancer Configuration
 # ---------------------------
 
-# Internal load balancer for NVA HA
-lb_name = "ce-nva-lb-dev"
-
-# Frontend IP configuration (from NVA subnet)
+# Frontend IP for internal load balancer (from NVA subnet)
 lb_frontend_ip = "10.0.1.4"
 
-# Health probe configuration
-health_probe_port     = 443
-health_probe_protocol = "Https"
-health_probe_path     = "/health"
+# Hub NVA IP for spoke routing (same as LB frontend IP)
+hub_nva_ip = "10.0.1.4"
 
-# Terraform State Backend (Optional - for local override)
-# -------------------------------------------------------
-# Normally configured via environment variables in GitHub Actions
-# Uncomment to use for local development:
+# F5 XC Configuration
+# -------------------
 
-# backend_resource_group_name  = "terraform-state-rg"
-# backend_storage_account_name = "tfstatexccedev"
-# backend_container_name       = "tfstate"
-# backend_key                  = "dev/terraform.tfstate"
+# F5 XC tenant name (your F5 XC console URL: <tenant>.console.ves.volterra.io)
+f5_xc_tenant = "your-tenant-name"
+
+# F5 XC namespace (typically "system" for CE sites)
+f5_xc_namespace = "system"
+
+# F5 XC API token (REQUIRED - set via environment variable or GitHub secret)
+# DO NOT hardcode here - use one of:
+#   export TF_VAR_f5_xc_api_token="your-api-token"
+#   OR in GitHub Actions: ${{ secrets.F5_XC_API_TOKEN }}
+#
+# To generate API token:
+#   1. Login to F5 XC Console: https://<tenant>.console.ves.volterra.io
+#   2. Navigate to: Administration > Personal Management > Credentials
+#   3. Click "Add Credentials" > API Token
+#   4. Copy the token value
+#
+# f5_xc_api_token = "CHANGE_ME_USE_ENV_VAR_INSTEAD"
+
+# CE VM Configuration
+# -------------------
+
+# VM size for CE instances (minimum: Standard_D8s_v3 = 8 vCPUs, 32 GB RAM)
+# See: https://docs.cloud.f5.com/docs/how-to/site-management/create-azure-site#azure-certified-hardware
+ce_vm_size = "Standard_D8s_v3"
+
+# SSH public key for CE VM access (REQUIRED)
+# Generate with: ssh-keygen -t rsa -b 4096 -f ~/.ssh/ce-azure-key
+# Then copy the public key: cat ~/.ssh/ce-azure-key.pub
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC... your-public-key-here"
+
+# Tags
+# ----
+
+# Common tags applied to all resources
+tags = {
+  environment = "dev"
+  managed_by  = "terraform"
+  project     = "f5-xc-ce-azure"
+  owner       = "your-name"
+}
+
+# Terraform State Backend Configuration
+# --------------------------------------
+# Backend is configured via backend.tf with environment variables in GitHub Actions
+# For local development, create a backend-config.hcl file:
+#
+# resource_group_name  = "terraform-state-rg"
+# storage_account_name = "tfstatexccedev"
+# container_name       = "tfstate"
+# key                  = "dev/terraform.tfstate"
+# use_oidc             = true
+#
+# Then run: terraform init -backend-config=backend-config.hcl
