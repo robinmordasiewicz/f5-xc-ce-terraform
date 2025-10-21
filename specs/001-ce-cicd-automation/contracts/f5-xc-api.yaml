@@ -1,0 +1,435 @@
+openapi: 3.0.3
+info:
+  title: F5 Distributed Cloud Customer Edge Registration API
+  description: |
+    API contract for F5 XC CE site registration and management.
+    This contract defines the integration points between Terraform and F5 XC Console
+    for automated CE deployment and registration.
+  version: 1.0.0
+  contact:
+    name: F5 XC API Support
+    url: https://docs.cloud.f5.com
+
+servers:
+  - url: https://{tenant}.console.ves.volterra.io/api
+    description: F5 XC Console API Endpoint
+    variables:
+      tenant:
+        default: your-tenant
+        description: F5 XC tenant name
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /config/namespaces/{namespace}/azure_vnet_sites:
+    post:
+      summary: Create Azure VNET Site
+      description: |
+        Creates a new Azure VNET site in F5 XC Console and generates registration token.
+        This is called by Terraform volt
+
+erra provider to initialize CE site.
+      operationId: createAzureVnetSite
+      tags:
+        - Site Management
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+            default: system
+          description: F5 XC namespace (typically "system" for sites)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AzureVnetSiteRequest'
+      responses:
+        '200':
+          description: Site created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AzureVnetSiteResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - Invalid API token
+        '409':
+          description: Site name already exists
+
+    get:
+      summary: List Azure VNET Sites
+      description: Retrieve list of all Azure VNET sites in namespace
+      operationId: listAzureVnetSites
+      tags:
+        - Site Management
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of sites
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AzureVnetSite'
+
+  /config/namespaces/{namespace}/azure_vnet_sites/{name}:
+    get:
+      summary: Get Azure VNET Site
+      description: Retrieve details of specific Azure VNET site including registration status
+      operationId: getAzureVnetSite
+      tags:
+        - Site Management
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Site name
+      responses:
+        '200':
+          description: Site details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AzureVnetSite'
+        '404':
+          description: Site not found
+
+    delete:
+      summary: Delete Azure VNET Site
+      description: Delete Azure VNET site and deregister CE instances
+      operationId: deleteAzureVnetSite
+      tags:
+        - Site Management
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Site deleted successfully
+        '404':
+          description: Site not found
+        '409':
+          description: Site has active CE instances - must deregister first
+
+  /config/namespaces/{namespace}/registration/token:
+    post:
+      summary: Generate Registration Token
+      description: Generate or retrieve registration token for CE site
+      operationId: generateRegistrationToken
+      tags:
+        - Registration
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                site_name:
+                  type: string
+                  description: Name of site for which to generate token
+              required:
+                - site_name
+      responses:
+        '200':
+          description: Token generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: Base64-encoded registration token
+                    format: byte
+                  expires_at:
+                    type: string
+                    format: date-time
+                    description: Token expiration timestamp (30 days from creation)
+
+  /api/site/{site_name}/status:
+    get:
+      summary: Get Site Status
+      description: Get current operational status of CE site and instances
+      operationId: getSiteStatus
+      tags:
+        - Monitoring
+      parameters:
+        - name: site_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Site status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteStatus'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: |
+        F5 XC API token format: "APIToken {base64-encoded-token}"
+        Example: "APIToken YWJjZGVmZ2hpamtsbW5vcA=="
+
+  schemas:
+    AzureVnetSiteRequest:
+      type: object
+      required:
+        - metadata
+        - spec
+      properties:
+        metadata:
+          type: object
+          required:
+            - name
+            - namespace
+          properties:
+            name:
+              type: string
+              description: Unique site name
+              pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+              maxLength: 64
+            namespace:
+              type: string
+              default: system
+            labels:
+              type: object
+              additionalProperties:
+                type: string
+        spec:
+          type: object
+          required:
+            - azure_region
+            - resource_group
+            - vnet
+            - ingress_gw
+          properties:
+            azure_region:
+              type: string
+              description: Azure region name (e.g., "eastus", "westus2")
+            resource_group:
+              type: string
+              description: Azure resource group name
+            vnet:
+              type: object
+              properties:
+                existing_vnet:
+                  type: object
+                  properties:
+                    vnet_name:
+                      type: string
+                    resource_group:
+                      type: string
+            ingress_gw:
+              type: object
+              properties:
+                azure_certified_hw:
+                  type: string
+                  enum: ["azure-byol"]
+                azure_vnet_config:
+                  type: object
+                  properties:
+                    sli_config:
+                      type: object
+                      properties:
+                        subnet:
+                          type: object
+                          properties:
+                            subnet_name:
+                              type: string
+                    slo_config:
+                      type: object
+                      properties:
+                        subnet:
+                          type: object
+                          properties:
+                            subnet_name:
+                              type: string
+
+    AzureVnetSiteResponse:
+      allOf:
+        - $ref: '#/components/schemas/AzureVnetSite'
+        - type: object
+          properties:
+            registration_token:
+              type: string
+              description: Base64-encoded registration token for CE cloud-init
+              format: byte
+
+    AzureVnetSite:
+      type: object
+      properties:
+        metadata:
+          type: object
+          properties:
+            name:
+              type: string
+            namespace:
+              type: string
+            uid:
+              type: string
+              description: Unique site identifier
+            labels:
+              type: object
+              additionalProperties:
+                type: string
+        spec:
+          type: object
+          description: Site specification (same as request)
+        status:
+          $ref: '#/components/schemas/SiteStatus'
+
+    SiteStatus:
+      type: object
+      properties:
+        state:
+          type: string
+          enum:
+            - PENDING
+            - PROVISIONING
+            - REGISTERING
+            - ONLINE
+            - OFFLINE
+            - DEGRADED
+            - FAILED
+          description: Current operational state
+        online_since:
+          type: string
+          format: date-time
+          description: Timestamp when site came online
+        last_heartbeat:
+          type: string
+          format: date-time
+          description: Last heartbeat from CE instance
+        ce_instances:
+          type: array
+          items:
+            type: object
+            properties:
+              instance_id:
+                type: string
+                description: CE instance identifier
+              hostname:
+                type: string
+              ip_address:
+                type: string
+              status:
+                type: string
+                enum: ["online", "offline", "registering"]
+              version:
+                type: string
+                description: CE software version
+              health:
+                type: object
+                properties:
+                  cpu_usage:
+                    type: number
+                    format: float
+                  memory_usage:
+                    type: number
+                    format: float
+                  disk_usage:
+                    type: number
+                    format: float
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Error message
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error details
+
+# Example Usage in Terraform volterra Provider
+#
+# resource "volterra_azure_vnet_site" "hub_ce" {
+#   name      = "hub-ce-site"
+#   namespace = "system"
+#
+#   azure_region = "eastus"
+#   resource_group = "xc-ce-rg"
+#
+#   vnet {
+#     existing_vnet {
+#       vnet_name = "hub-vnet"
+#       resource_group = "xc-ce-rg"
+#     }
+#   }
+#
+#   ingress_gw {
+#     azure_certified_hw = "azure-byol"
+#
+#     azure_vnet_config {
+#       sli_config {
+#         subnet {
+#           subnet_name = "nva-subnet"
+#         }
+#       }
+#       slo_config {
+#         subnet {
+#           subnet_name = "nva-subnet"
+#         }
+#       }
+#     }
+#   }
+# }
+#
+# output "registration_token" {
+#   value     = volterra_azure_vnet_site.hub_ce.registration_token
+#   sensitive = true
+# }
