@@ -1,50 +1,339 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report:
+- Version change: Initial creation → 1.0.0
+- Modified principles: N/A (initial version)
+- Added sections: Core Principles (5), GitHub Workflow, Quality Standards, Governance
+- Removed sections: N/A
+- Templates requiring updates:
+  ✅ .specify/templates/plan-template.md - Constitution Check section compatible
+  ✅ .specify/templates/spec-template.md - Requirements section compatible
+  ✅ .specify/templates/tasks-template.md - Testing gates compatible
+- Follow-up TODOs: None
+-->
+
+# F5 XC CE Terraform Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. GitHub Workflow Discipline (NON-NEGOTIABLE)
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+**No code modifications are permitted without following the complete GitHub workflow:**
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+- **Issue Creation REQUIRED**: Before ANY code change, a GitHub issue MUST be created describing:
+  - The problem or feature request
+  - Expected behavior and success criteria
+  - Acceptance criteria for completion
+  - Labels for categorization (bug, feature, enhancement, etc.)
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+- **Branch Strategy MANDATORY**: All work MUST occur in feature branches:
+  - Branch naming: `[issue-number]-brief-description` (e.g., `42-add-logging`)
+  - NEVER commit directly to `main` or `master`
+  - Create branch from latest `main` before starting work
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+- **Pull Request REQUIRED**: All changes MUST go through pull requests:
+  - PR title MUST reference issue: "Fixes #42: Add logging to auth module"
+  - PR description MUST link to issue and describe changes
+  - PR MUST pass all automated checks before merge
+  - At least one approval REQUIRED before merge (if team size permits)
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+- **Issue Closure**: Issues MUST only be closed when:
+  - PR is merged to main branch
+  - All acceptance criteria are met
+  - Tests pass and code is deployed/validated
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+**Rationale**: This workflow ensures traceability, enables collaboration, maintains project history, and prevents untracked changes from entering the codebase.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+### II. Code Quality Standards
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**All code MUST meet the following quality gates before merge:**
+
+- **Linting**: Code MUST pass all configured linters without warnings
+  - Configuration files MUST be present in repository root
+  - Linting MUST run automatically in CI/CD pipeline
+  - No lint rule exceptions without documented justification
+
+- **Code Review**: All code MUST be reviewed before merge
+  - Reviewers MUST verify adherence to this constitution
+  - Reviews MUST check for security vulnerabilities
+  - Reviews MUST validate test coverage
+  - Code style MUST be consistent with existing patterns
+
+- **Documentation**: Code MUST be self-documenting and include:
+  - Clear function/module/class documentation
+  - Complex logic MUST have inline comments explaining "why"
+  - Public APIs MUST have usage examples
+  - README updates for new features or changed behavior
+
+- **Security**: Code MUST follow security best practices
+  - No hardcoded secrets or credentials
+  - Input validation on all external data
+  - Proper error handling without exposing sensitive information
+  - Dependencies MUST be kept up to date
+
+**Rationale**: Quality gates prevent technical debt accumulation, reduce bugs, improve maintainability, and ensure professional code standards.
+
+### III. Testing Standards (NON-NEGOTIABLE)
+
+**Test-Driven Development (TDD) is MANDATORY for all new features:**
+
+- **Tests Written First**: For new features:
+  1. Write tests that describe expected behavior
+  2. Get user/stakeholder approval on test scenarios
+  3. Verify tests FAIL (red phase)
+  4. Implement feature until tests PASS (green phase)
+  5. Refactor while maintaining passing tests
+
+- **Test Coverage Requirements**:
+  - **Unit Tests**: REQUIRED for all business logic functions
+    - Each function MUST have tests for: happy path, edge cases, error conditions
+    - Minimum 80% code coverage for new code
+  - **Integration Tests**: REQUIRED for:
+    - Cross-module interactions
+    - External service integrations
+    - Database operations
+    - API endpoint behaviors
+  - **Contract Tests**: REQUIRED for:
+    - Public API changes
+    - Inter-service communication
+    - Shared data schemas
+
+- **Test Quality Standards**:
+  - Tests MUST be deterministic (no flaky tests)
+  - Tests MUST run in isolation (no dependencies between tests)
+  - Tests MUST be fast (<1s per unit test, <10s per integration test)
+  - Tests MUST have clear Given-When-Then structure
+  - Test names MUST clearly describe what is being tested
+
+- **Regression Protection**:
+  - Bug fixes MUST include tests that would have caught the bug
+  - Tests MUST continue to pass after merge
+
+**Rationale**: TDD ensures features are testable, prevents regressions, improves design quality, and provides living documentation of expected behavior.
+
+### IV. User Experience Consistency
+
+**All user-facing changes MUST maintain consistent experience:**
+
+- **Interface Consistency**:
+  - UI components MUST follow established design patterns
+  - Error messages MUST be clear, actionable, and consistent in tone
+  - Terminology MUST be consistent across all interfaces
+  - User flows MUST be intuitive and predictable
+
+- **Performance Experience**:
+  - User actions MUST receive immediate feedback (loading states, progress indicators)
+  - Operations taking >2 seconds MUST show progress
+  - Error states MUST provide recovery paths
+  - Timeouts MUST be reasonable and documented
+
+- **Accessibility**:
+  - All interfaces MUST be keyboard navigable
+  - Color contrast MUST meet WCAG AA standards
+  - Screen reader compatibility MUST be tested
+  - Error messages MUST be programmatically associated with inputs
+
+- **Documentation Experience**:
+  - User documentation MUST be updated with interface changes
+  - Examples MUST be complete and runnable
+  - Error messages MUST link to troubleshooting documentation where appropriate
+
+**Rationale**: Consistent UX reduces cognitive load, improves user satisfaction, reduces support burden, and maintains professional product quality.
+
+### V. Performance Requirements
+
+**All code MUST meet performance benchmarks before merge:**
+
+- **Response Time Standards**:
+  - API endpoints: <200ms p95 latency for simple operations
+  - Database queries: <100ms p95 for read operations
+  - UI rendering: <100ms time to interactive for page loads
+  - Background jobs: MUST complete within documented SLA
+
+- **Resource Efficiency**:
+  - Memory usage MUST not grow unbounded (no memory leaks)
+  - CPU usage MUST be proportional to workload
+  - Database connections MUST be properly pooled and released
+  - File handles MUST be properly closed
+
+- **Scalability**:
+  - System MUST handle expected concurrent users (documented in plan.md)
+  - Database queries MUST use appropriate indexes
+  - N+1 query problems MUST be avoided
+  - Caching MUST be used for expensive operations
+
+- **Monitoring Required**:
+  - Performance metrics MUST be collected and monitored
+  - Alerts MUST be configured for performance degradation
+  - Performance tests MUST be part of CI/CD pipeline
+  - Regression in performance MUST block deployment
+
+- **Performance Testing**:
+  - Load tests REQUIRED for API changes
+  - Benchmark tests REQUIRED for critical paths
+  - Performance regression tests REQUIRED in CI
+  - Performance test results MUST be documented in PRs
+
+**Rationale**: Performance is a feature, not an afterthought. Poor performance degrades user experience, increases infrastructure costs, and limits scalability.
+
+## GitHub Workflow
+
+### Issue Management
+
+**All work MUST originate from a GitHub issue:**
+
+- Issues MUST use appropriate templates (bug, feature, enhancement)
+- Issues MUST have clear acceptance criteria
+- Issues MUST be labeled for categorization and prioritization
+- Issues MUST be assigned before work begins
+- Issues MUST be linked to project milestones when applicable
+
+### Branch Management
+
+**Feature branches MUST follow these conventions:**
+
+- Branch from latest `main` before starting work
+- Branch naming: `[issue-number]-kebab-case-description`
+- Keep branches short-lived (<5 days of work)
+- Rebase on `main` regularly to avoid merge conflicts
+- Delete branches immediately after merge
+
+### Pull Request Standards
+
+**All PRs MUST include:**
+
+- **Title**: "Fixes #[issue]: Brief description"
+- **Description**:
+  - Link to issue
+  - Summary of changes
+  - Testing performed
+  - Screenshots for UI changes
+  - Performance impact notes
+- **Checklist**:
+  - [ ] Tests added and passing
+  - [ ] Documentation updated
+  - [ ] No linting errors
+  - [ ] Performance validated
+  - [ ] Security reviewed
+
+### Merge Strategy
+
+- **Squash merges** preferred for feature branches
+- **Merge commits** for important integration points
+- **No force pushes** to `main` or shared branches
+- All checks MUST pass before merge
+
+## Quality Standards
+
+### Code Review Process
+
+**Every PR MUST be reviewed using this checklist:**
+
+1. **Constitution Compliance**:
+   - [ ] GitHub workflow followed (issue → branch → PR)
+   - [ ] Tests written and passing
+   - [ ] Code quality standards met
+   - [ ] Performance requirements validated
+   - [ ] UX consistency maintained
+
+2. **Technical Quality**:
+   - [ ] Code is readable and maintainable
+   - [ ] Logic is sound and efficient
+   - [ ] Error handling is comprehensive
+   - [ ] No obvious security vulnerabilities
+
+3. **Testing Quality**:
+   - [ ] Tests cover happy paths and edge cases
+   - [ ] Tests are deterministic and fast
+   - [ ] Integration points are tested
+   - [ ] Test names clearly describe scenarios
+
+4. **Documentation Quality**:
+   - [ ] Code is self-documenting
+   - [ ] Complex logic is explained
+   - [ ] Public APIs have examples
+   - [ ] User docs updated if needed
+
+### Continuous Integration
+
+**CI pipeline MUST enforce:**
+
+- All linters pass with zero warnings
+- All tests pass with minimum coverage thresholds
+- Performance benchmarks meet requirements
+- Security scans show no critical vulnerabilities
+- Build succeeds on all target platforms
+
+### Definition of Done
+
+**A task is only "done" when:**
+
+1. Code is written and reviewed
+2. All tests pass (unit, integration, contract)
+3. Performance validated against requirements
+4. Documentation updated
+5. PR merged to main
+6. Issue closed with verification comment
+7. Changes deployed (if applicable)
+8. Stakeholders notified
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+### Constitution Authority
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+This constitution supersedes all other development practices and guidelines. When conflicts arise, this document takes precedence.
+
+### Amendment Process
+
+**Constitution changes MUST follow this process:**
+
+1. **Proposal**: Create GitHub issue with proposed amendment
+2. **Discussion**: Allow minimum 5 business days for team feedback
+3. **Documentation**: Update constitution with clear rationale
+4. **Version Update**: Increment version following semantic versioning:
+   - **MAJOR**: Backward-incompatible changes to core principles
+   - **MINOR**: New principles or material expansions
+   - **PATCH**: Clarifications, wording improvements, typo fixes
+5. **Migration Plan**: Document how existing code will be brought into compliance
+6. **Approval**: Requires team consensus or designated authority approval
+7. **Communication**: Announce changes to all stakeholders
+
+### Compliance Review
+
+**Ongoing compliance enforcement:**
+
+- All PRs MUST verify constitution compliance
+- Monthly audits of code quality and test coverage
+- Quarterly review of constitution effectiveness
+- Annual complete constitution review and update
+
+### Complexity Justification
+
+**Violations of these principles MUST be justified:**
+
+- Documented in plan.md Complexity Tracking table
+- Approved by technical lead or team consensus
+- Time-boxed with plan to remove exception
+- Tracked in technical debt backlog
+
+### Exceptions
+
+**Emergency exceptions MAY be granted when:**
+
+- Production incident requires immediate hotfix
+- Security vulnerability requires urgent patching
+
+**Exception process:**
+1. Document exception reason in PR
+2. Create follow-up issue to properly address
+3. Fast-track review with designated approver
+4. Return to normal workflow for follow-up work
+
+### Tools and Automation
+
+Refer to `.specify/templates/` for:
+- `plan-template.md`: Implementation planning workflow
+- `spec-template.md`: Feature specification format
+- `tasks-template.md`: Task breakdown and organization
+- `checklist-template.md`: Quality gate checklists
+
+**Version**: 1.0.0 | **Ratified**: 2025-10-21 | **Last Amended**: 2025-10-21
