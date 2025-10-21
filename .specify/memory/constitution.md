@@ -47,6 +47,62 @@ Sync Impact Report:
 
 **All code MUST meet the following quality gates before merge:**
 
+- **Pre-commit Hooks (NON-NEGOTIABLE)**: MANDATORY validation executed before EVERY commit
+  - **Framework Required**: MUST use pre-commit framework (https://pre-commit.com)
+  - **Configuration File**: `.pre-commit-config.yaml` MUST be present in repository root
+  - **Installation Required**: ALL developers MUST install pre-commit hooks via `pre-commit install`
+  - **Comprehensive Coverage**: Hooks MUST validate ALL file types in repository:
+    - Terraform files (.tf, .tfvars): terraform_fmt, terraform_validate, terraform_docs, tflint
+    - YAML files (.yml, .yaml): yamllint, check-yaml
+    - JSON files (.json): check-json, prettier
+    - Markdown files (.md): markdownlint, prettier
+    - Shell scripts (.sh): shellcheck, shfmt
+    - Python files (.py): ruff, black (check-only), mypy
+    - Go files (.go): gofmt, golangci-lint
+    - General: trailing-whitespace, end-of-file-fixer, check-merge-conflict, detect-secrets
+
+  - **READ-ONLY VALIDATION (CRITICAL)**: Pre-commit hooks MUST ONLY validate and report errors
+    - **NO AUTO-FIX**: Hooks MUST NOT automatically fix or correct any problems
+    - **Display Errors Only**: Hooks MUST display validation errors and exit with non-zero status
+    - **Manual Fixes Required**: Developers MUST manually fix all reported errors
+    - **Configuration Enforcement**:
+      - Terraform: `terraform fmt -check` (NOT `terraform fmt -write`)
+      - Black: `black --check --diff` (NOT `black`)
+      - Prettier: `prettier --check` (NOT `prettier --write`)
+      - All formatters: Use check/diff modes, NEVER write modes
+
+  - **BYPASS FORBIDDEN (NON-NEGOTIABLE)**: Bypassing pre-commit checks is STRICTLY PROHIBITED
+    - **No --no-verify**: `git commit --no-verify` is FORBIDDEN
+    - **No Commenting Out**: Commenting out or disabling pre-commit checks is FORBIDDEN
+    - **No Skip Flags**: Using `SKIP=` environment variable is FORBIDDEN
+    - **Enforcement**: CI/CD pipeline MUST run identical checks to prevent bypass
+    - **Code Review**: Reviewers MUST reject any PR attempting to bypass or disable checks
+    - **Exception Process**: If a hook genuinely needs to be skipped (e.g., emergency hotfix):
+      1. MUST be documented in PR description with detailed justification
+      2. MUST be approved by technical lead
+      3. MUST create follow-up issue to fix violations
+      4. MUST be limited to emergency situations only
+
+  - **Hook Execution Order**: Hooks MUST run in logical dependency order
+    1. File-level checks (trailing-whitespace, end-of-file-fixer, mixed-line-ending)
+    2. Syntax validation (check-yaml, check-json, terraform_validate)
+    3. Security checks (detect-secrets, checkov security scans)
+    4. Linting (yamllint, shellcheck, tflint, markdownlint)
+    5. Formatting validation (terraform fmt -check, black --check, prettier --check)
+    6. Documentation generation checks (terraform_docs)
+
+  - **Performance Requirements**: Pre-commit hooks MUST complete in reasonable time
+    - Individual hooks: <30 seconds per file type
+    - Total pre-commit time: <2 minutes for typical commit
+    - Hooks MUST run only on staged files (not entire repository)
+    - Parallel execution MUST be enabled where possible
+
+  - **Error Reporting**: Hook failures MUST provide actionable error messages
+    - Clear indication of which file(s) failed validation
+    - Specific line numbers and error descriptions
+    - Suggested fix commands or documentation links
+    - Exit with non-zero status to block commit
+
 - **Linting**: Code MUST pass all configured linters without warnings
   - Configuration files MUST be present in repository root
   - Linting MUST run automatically in CI/CD pipeline
@@ -70,7 +126,7 @@ Sync Impact Report:
   - Proper error handling without exposing sensitive information
   - Dependencies MUST be kept up to date
 
-**Rationale**: Quality gates prevent technical debt accumulation, reduce bugs, improve maintainability, and ensure professional code standards.
+**Rationale**: Quality gates prevent technical debt accumulation, reduce bugs, improve maintainability, and ensure professional code standards. Pre-commit hooks enforce standards at the earliest possible point (before commit), preventing quality issues from entering version control and ensuring consistent code quality across all contributors.
 
 ### III. Testing Standards (NON-NEGOTIABLE)
 
