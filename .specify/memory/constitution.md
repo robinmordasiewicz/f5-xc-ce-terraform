@@ -1,24 +1,28 @@
 <!--
 Sync Impact Report:
-- Version change: 1.0.0 → 1.1.0
+- Version change: 1.1.0 → 1.2.0
 - Modified principles:
-  * I. GitHub Workflow Discipline - EXPANDED with mandatory requirements:
-    - Added ABSOLUTE RULE: NO WORK WITHOUT A GITHUB ISSUE
-    - Added PROHIBITION: Code changes without issue are STRICTLY FORBIDDEN
-    - Added Branch Cleanup MANDATORY section with specific git commands
-    - Added Workflow Completion requirement before starting new work
+  * I. GitHub Workflow Discipline - MAJOR EXPANSION with pre-work requirements:
+    - Added STEP ZERO: Issue creation MUST happen FIRST, BEFORE ANY work
+    - Reorganized workflow to emphasize issue-first sequence
+    - Added explicit PROHIBITION: Starting work without a pre-existing GitHub issue
+    - Clarified "work" includes: code changes, file edits, brainstorming, planning
+    - Strengthened enforcement: Issue must exist BEFORE branch creation
+    - Updated workflow sequence: Issue (FIRST) → Branch → PR → Merge → Cleanup
 - Added sections:
-  * Issue Closure and Branch Cleanup (expanded subsection of Principle I)
+  * "STEP ZERO: Issue Creation (PRE-REQUISITE)" - new subsection emphasizing issue-first workflow
 - Removed sections: N/A
 - Templates requiring updates:
-  ✅ .specify/templates/plan-template.md - Constitution Check section compatible
-  ✅ .specify/templates/spec-template.md - Requirements section compatible
-  ✅ .specify/templates/tasks-template.md - Testing gates compatible
-  ⚠️ .specify/templates/commands/*.md - Commands should verify issue existence before work
-  ⚠️ README.md or quickstart docs - Should document branch cleanup workflow
+  ✅ .specify/templates/plan-template.md - Constitution Check section remains compatible
+  ✅ .specify/templates/spec-template.md - Requirements section remains compatible
+  ✅ .specify/templates/tasks-template.md - Testing gates remain compatible
+  ⚠️ README.md or workflow docs - Should document issue-first workflow explicitly
+  ⚠️ Agent guidance - Agents should verify issue existence before ANY work begins
 - Follow-up TODOs:
-  * Consider adding pre-commit hook to verify current branch links to a GitHub issue
-  * Consider adding GitHub Actions automation for branch deletion after PR merge
+  * Update README.md or CONTRIBUTING.md to document issue-first workflow
+  * Consider adding GitHub CLI examples: "gh issue create" before any work
+  * Consider adding pre-commit hook or script to verify current branch links to GitHub issue
+  * Update agent/automation tooling to enforce issue verification before work begins
 -->
 
 # F5 XC CE Terraform Constitution
@@ -27,40 +31,89 @@ Sync Impact Report:
 
 ### I. GitHub Workflow Discipline (NON-NEGOTIABLE)
 
-**ABSOLUTE RULE: NO WORK WITHOUT A GITHUB ISSUE. All code modifications MUST follow the complete GitHub workflow:**
+**ABSOLUTE RULE: ISSUE CREATION IS STEP ZERO. NO WORK MAY BEGIN WITHOUT A PRE-EXISTING GITHUB ISSUE.**
 
-- **Issue Creation REQUIRED (PRE-REQUISITE)**: Before ANY code change, modification, or implementation work begins, a GitHub issue MUST be created describing:
-  - The problem or feature request
+All development work MUST follow this MANDATORY workflow sequence:
+
+#### STEP ZERO: Issue Creation (PRE-REQUISITE - REQUIRED FIRST)
+
+**Before ANY work begins, a GitHub issue MUST be created:**
+
+- **Issue Creation REQUIRED FIRST**: Before:
+  - Any code changes, modifications, or file edits
+  - Any brainstorming, exploration, or planning activities
+  - Creating any branches
+  - Writing any implementation code
+  - Making any configuration changes
+  - Updating any documentation related to implementation
+
+- **STRICT PROHIBITION**: The following activities are ABSOLUTELY FORBIDDEN without a pre-existing GitHub issue:
+  - Starting implementation work
+  - Creating feature branches
+  - Making code commits
+  - Opening pull requests
+  - Any "exploratory coding" or "quick fixes"
+  - Ad-hoc changes to the codebase
+
+- **Issue Content Requirements**: Each issue MUST describe:
+  - The problem, bug, or feature request clearly
   - Expected behavior and success criteria
   - Acceptance criteria for completion
   - Labels for categorization (bug, feature, enhancement, etc.)
-  - **PROHIBITION**: Writing code, creating branches, or making any changes WITHOUT an issue is STRICTLY FORBIDDEN
+  - Priority/severity if applicable
 
-- **Branch Strategy MANDATORY**: All work MUST occur in feature branches:
+- **Enforcement**: This rule has NO exceptions:
+  - Even "small fixes" require an issue
+  - Even "typo corrections" require an issue
+  - Even "urgent hotfixes" require an issue (created first, then fast-tracked)
+  - Emergency exceptions still require issue creation BEFORE work begins
+
+**Rationale**: Issue-first workflow ensures ALL work is tracked, documented, reviewed, and traceable. It prevents undocumented changes, maintains project history, enables collaboration, and ensures every code change has justification and context. This is the foundation of professional software development discipline.
+
+#### Branch Strategy (MANDATORY - After Issue Creation)
+
+**All work MUST occur in feature branches linked to the GitHub issue:**
+
+- **Branch Creation**: ONLY after issue exists
   - Branch naming: `[issue-number]-brief-description` (e.g., `42-add-logging`)
   - NEVER commit directly to `main` or `master`
   - Create branch from latest `main` before starting work
   - Branch MUST be linked to the GitHub issue
 
-- **Pull Request REQUIRED**: All changes MUST go through pull requests:
-  - PR title MUST reference issue: "Fixes #42: Add logging to auth module"
-  - PR description MUST link to issue and describe changes
-  - PR MUST pass all automated checks before merge
-  - At least one approval REQUIRED before merge (if team size permits)
+- **Branch Lifecycle**: Keep branches short-lived (<5 days of work)
 
-- **Issue Closure and Branch Cleanup**: After PR merge, the following MUST occur:
-  - Issue MUST be closed ONLY when:
-    - PR is merged to main branch
-    - All acceptance criteria are met
-    - Tests pass and code is deployed/validated
-  - **Branch Deletion MANDATORY**:
-    - Local feature branch MUST be deleted: `git branch -d [branch-name]`
-    - Remote feature branch MUST be deleted: `git push origin --delete [branch-name]`
-    - Git client MUST switch back to main: `git checkout main`
-    - Main branch MUST be updated: `git pull origin main`
-  - **Workflow Completion**: The cycle Issue → Branch → PR → Merge → Cleanup MUST be fully completed before starting new work
+- **Conflict Prevention**: Rebase on `main` regularly to avoid merge conflicts
 
-**Rationale**: This workflow ensures traceability, enables collaboration, maintains project history, prevents untracked changes from entering the codebase, and keeps the repository clean by removing obsolete branches. The mandatory issue requirement prevents ad-hoc, undocumented changes that bypass quality gates and review processes.
+#### Pull Request (REQUIRED - After Implementation)
+
+**All changes MUST go through pull requests:**
+
+- PR title MUST reference issue: "Fixes #42: Add logging to auth module"
+- PR description MUST link to issue and describe changes
+- PR MUST pass all automated checks before merge
+- At least one approval REQUIRED before merge (if team size permits)
+
+#### Issue Closure and Branch Cleanup (MANDATORY - After Merge)
+
+**After PR merge, the following MUST occur:**
+
+- **Issue Closure**: Issue MUST be closed ONLY when:
+  - PR is merged to main branch
+  - All acceptance criteria are met
+  - Tests pass and code is deployed/validated
+
+- **Branch Deletion MANDATORY**:
+  - Local feature branch MUST be deleted: `git branch -d [branch-name]`
+  - Remote feature branch MUST be deleted: `git push origin --delete [branch-name]`
+  - Git client MUST switch back to main: `git checkout main`
+  - Main branch MUST be updated: `git pull origin main`
+
+- **Workflow Completion**: The complete cycle MUST finish before starting new work:
+  ```
+  Issue (FIRST) → Branch → Code → PR → Review → Merge → Close Issue → Delete Branch → Update Main
+  ```
+
+**Rationale**: This workflow ensures traceability, enables collaboration, maintains project history, prevents untracked changes from entering the codebase, keeps the repository clean by removing obsolete branches, and ensures every code change has proper justification and review.
 
 ### II. Code Quality Standards
 
@@ -254,8 +307,9 @@ Sync Impact Report:
 
 ### Issue Management
 
-**All work MUST originate from a GitHub issue:**
+**All work MUST originate from a GitHub issue (created FIRST):**
 
+- Issues MUST be created BEFORE any work begins
 - Issues MUST use appropriate templates (bug, feature, enhancement)
 - Issues MUST have clear acceptance criteria
 - Issues MUST be labeled for categorization and prioritization
@@ -266,7 +320,7 @@ Sync Impact Report:
 
 **Feature branches MUST follow these conventions:**
 
-- **Branch Creation**: Branch from latest `main` before starting work (`git checkout -b [issue-number]-description`)
+- **Branch Creation**: Branch from latest `main` ONLY after issue exists (`git checkout -b [issue-number]-description`)
 - **Branch Naming**: `[issue-number]-kebab-case-description` (e.g., `42-add-logging`)
 - **Branch Lifecycle**: Keep branches short-lived (<5 days of work)
 - **Conflict Prevention**: Rebase on `main` regularly to avoid merge conflicts
@@ -289,6 +343,7 @@ Sync Impact Report:
   - Screenshots for UI changes
   - Performance impact notes
 - **Checklist**:
+  - [ ] Issue created FIRST before work began
   - [ ] Tests added and passing
   - [ ] Documentation updated
   - [ ] No linting errors
@@ -309,7 +364,8 @@ Sync Impact Report:
 **Every PR MUST be reviewed using this checklist:**
 
 1. **Constitution Compliance**:
-   - [ ] GitHub workflow followed (issue → branch → PR)
+   - [ ] GitHub workflow followed (issue FIRST → branch → PR)
+   - [ ] Issue existed BEFORE work began
    - [ ] Tests written and passing
    - [ ] Code quality standards met
    - [ ] Performance requirements validated
@@ -347,14 +403,16 @@ Sync Impact Report:
 
 **A task is only "done" when:**
 
-1. Code is written and reviewed
-2. All tests pass (unit, integration, contract)
-3. Performance validated against requirements
-4. Documentation updated
-5. PR merged to main
-6. Issue closed with verification comment
-7. Changes deployed (if applicable)
-8. Stakeholders notified
+1. Issue created and documented FIRST
+2. Code is written and reviewed
+3. All tests pass (unit, integration, contract)
+4. Performance validated against requirements
+5. Documentation updated
+6. PR merged to main
+7. Issue closed with verification comment
+8. Changes deployed (if applicable)
+9. Branch deleted (local and remote)
+10. Stakeholders notified
 
 ## Governance
 
@@ -403,10 +461,11 @@ This constitution supersedes all other development practices and guidelines. Whe
 - Security vulnerability requires urgent patching
 
 **Exception process:**
-1. Document exception reason in PR
-2. Create follow-up issue to properly address
-3. Fast-track review with designated approver
-4. Return to normal workflow for follow-up work
+1. Create GitHub issue FIRST documenting emergency (even for hotfixes)
+2. Document exception reason in PR
+3. Create follow-up issue to properly address
+4. Fast-track review with designated approver
+5. Return to normal workflow for follow-up work
 
 ### Tools and Automation
 
@@ -416,4 +475,4 @@ Refer to `.specify/templates/` for:
 - `tasks-template.md`: Task breakdown and organization
 - `checklist-template.md`: Quality gate checklists
 
-**Version**: 1.1.0 | **Ratified**: 2025-10-21 | **Last Amended**: 2025-10-21
+**Version**: 1.2.0 | **Ratified**: 2025-10-21 | **Last Amended**: 2025-10-21
