@@ -82,17 +82,23 @@ fi
 
 print_success "Prerequisites check passed"
 
-# Configuration
-RESOURCE_GROUP="${RESOURCE_GROUP:-terraform-state-rg}"
-LOCATION="${LOCATION:-eastus}"
-STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-tfstatexcce$(date +%s)}" # Must be globally unique
-CONTAINER_NAME="${CONTAINER_NAME:-tfstate}"
-CREATE_SP="${1:-}"
-
-# Get current subscription info
+# Get current subscription and user info
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 TENANT_ID=$(az account show --query tenantId -o tsv)
 SUBSCRIPTION_NAME=$(az account show --query name -o tsv)
+AZURE_USERNAME=$(az account show --query user.name -o tsv | cut -d@ -f1 | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-')
+
+# GitHub repository name
+GITHUB_REPO="f5-xc-ce-terraform"
+
+# Configuration with improved naming to prevent conflicts
+# Azure resource group naming: alphanumeric + hyphens, max 90 chars
+RESOURCE_GROUP="${RESOURCE_GROUP:-rg-${AZURE_USERNAME}-${GITHUB_REPO}-tfstate}"
+LOCATION="${LOCATION:-eastus}"
+# Storage account: lowercase alphanumeric only, 3-24 chars, globally unique
+STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-tfstate${AZURE_USERNAME}$(date +%s)}"
+CONTAINER_NAME="${CONTAINER_NAME:-tfstate}"
+CREATE_SP="${1:-}"
 
 print_info "Target Subscription: $SUBSCRIPTION_NAME ($SUBSCRIPTION_ID)"
 print_info "Resource Group: $RESOURCE_GROUP"
@@ -116,7 +122,7 @@ else
   az group create \
     --name "$RESOURCE_GROUP" \
     --location "$LOCATION" \
-    --tags environment=shared managed_by=terraform purpose=state-storage \
+    --tags environment=shared managed_by=terraform purpose=state-storage owner="$AZURE_USERNAME" project="$GITHUB_REPO" \
     --output none
   print_success "Resource group created: $RESOURCE_GROUP"
 fi
@@ -137,7 +143,7 @@ else
     --https-only true \
     --min-tls-version TLS1_2 \
     --allow-blob-public-access false \
-    --tags environment=shared managed_by=terraform purpose=state-storage \
+    --tags environment=shared managed_by=terraform purpose=state-storage owner="$AZURE_USERNAME" project="$GITHUB_REPO" \
     --output none
   print_success "Storage account created: $STORAGE_ACCOUNT"
 fi
