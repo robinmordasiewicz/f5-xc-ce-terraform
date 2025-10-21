@@ -1,0 +1,140 @@
+name: Terraform Plan (PR Validation)
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-*.yml'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  terraform-init:
+    name: Initialize
+    uses: ./.github/workflows/terraform-init.yml
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_RESOURCE_GROUP_NAME: ${{ secrets.ARM_RESOURCE_GROUP_NAME }}
+      ARM_STORAGE_ACCOUNT_NAME: ${{ secrets.ARM_STORAGE_ACCOUNT_NAME }}
+      ARM_CONTAINER_NAME: ${{ secrets.ARM_CONTAINER_NAME }}
+      ARM_KEY: ${{ secrets.ARM_KEY }}
+
+  terraform-validate:
+    name: Validate
+    needs: terraform-init
+    uses: ./.github/workflows/terraform-validate.yml
+
+  terraform-plan:
+    name: Plan Infrastructure Changes
+    needs: terraform-validate
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform/environments/dev
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.6.0'
+
+      - name: Download Terraform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-artifacts
+          path: terraform/environments/dev
+
+      - name: Azure Login via OIDC
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Plan
+        id: plan
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_f5_xc_api_token: ${{ secrets.F5_XC_API_TOKEN }}
+        run: |
+          terraform plan -no-color -out=tfplan 2>&1 | tee plan.txt
+          echo "exitcode=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Upload Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: terraform/environments/dev/tfplan
+          retention-days: 7
+
+      - name: Parse Plan Output
+        id: parse
+        run: |
+          # Extract resource changes summary
+          if grep -q "Plan:" plan.txt; then
+            SUMMARY=$(grep "Plan:" plan.txt | tail -1)
+            echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+          else
+            echo "summary=No changes detected" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment PR with Plan
+        uses: actions/github-script@v7
+        env:
+          PLAN: ${{ steps.parse.outputs.summary }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `
+            ## Terraform Plan Results
+
+            **Status**: ${{ steps.plan.outcome == 'success' && '✅ Success' || '❌ Failed' }}
+
+            **Summary**: ${ process.env.PLAN }
+
+            <details>
+            <summary>Show Plan Details</summary>
+
+            \`\`\`
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+
+            </details>
+
+            **Next Steps**:
+            - Review the plan output above
+            - Merge this PR to automatically apply changes
+            - Infrastructure changes will be applied via \`terraform-apply.yml\` workflow
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: Fail on plan errors
+        if: steps.plan.outcome != 'success'
+        run: exit 1
+
+      - name: Plan Summary
+        run: |
+          echo "## Terraform Plan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.parse.outputs.summary }}" >> $GITHUB_STEP_SUMMARY
