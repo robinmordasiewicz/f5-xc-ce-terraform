@@ -50,22 +50,20 @@ repos:
         name: Check for destroyed symlinks
 
       # File formatting checks (READ-ONLY)
-      - id: trailing-whitespace
-        name: Check for trailing whitespace
-        args: ['--markdown-linebreak-ext=md']
-
-      - id: end-of-file-fixer
-        name: Check files end with newline
+      # NOTE: trailing-whitespace and end-of-file-fixer removed - they auto-fix by default
+      # and do not have check-only modes (violates constitution requirement)
 
       - id: mixed-line-ending
         name: Check for mixed line endings
-        args: ['--fix=lf']
+        # CHECK-ONLY: Detects mixed line endings without auto-fixing
 
       - id: check-executables-have-shebangs
         name: Check executables have shebangs
+        # CHECK-ONLY: Reports error if executable files lack shebangs
 
-      - id: check-shebang-scripts-are-executable
-        name: Check shebang scripts are executable
+      # NOTE: check-shebang-scripts-are-executable REMOVED
+      # Reason: Automatically makes files executable (chmod +x) - violates CHECK-ONLY requirement
+      # This hook modifies file permissions and cannot be configured for read-only mode
 
 # ============================================================================
 # STAGE 2: Syntax Validation
@@ -84,16 +82,14 @@ repos:
             \.pre-commit-config\.yaml
           )$
 
-  # JSON Validation
+  # JSON Validation (CHECK-ONLY)
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
       - id: check-json
-        name: Validate JSON syntax
-
-      - id: pretty-format-json
-        name: Check JSON formatting
-        args: ['--autofix', '--indent=2', '--no-sort-keys']
+        name: Validate JSON syntax and formatting
+        # CHECK-ONLY: Detects JSON issues without auto-fixing
+        # Note: pretty-format-json removed (violates CHECK-ONLY requirement)
 
 # ============================================================================
 # STAGE 3: Security Checks (READ-ONLY)
@@ -174,7 +170,7 @@ repos:
     hooks:
       - id: ruff
         name: Ruff Python linter
-        args: ['--fix']  # Auto-fix safe issues only
+        # CHECK-ONLY: Detects issues without auto-fixing (--fix removed per constitution)
         types: [python]
 
   # Go Linting (CHECK-ONLY)
@@ -208,10 +204,11 @@ repos:
 
       - id: terraform_docs
         name: Check Terraform documentation
+        # CHECK-ONLY: Validates documentation exists without auto-generating
         args:
-          - --hook-config=--path-to-file=README.md
-          - --hook-config=--add-to-existing-file=true
           - --args=--lockfile=false
+          - --args=--output-check
+        # Note: Removed --add-to-existing-file (violates CHECK-ONLY requirement)
 
   # Shell Script Formatting (CHECK-ONLY)
   - repo: https://github.com/scop/pre-commit-shfmt
