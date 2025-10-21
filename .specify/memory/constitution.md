@@ -1,14 +1,24 @@
 <!--
 Sync Impact Report:
-- Version change: Initial creation → 1.0.0
-- Modified principles: N/A (initial version)
-- Added sections: Core Principles (5), GitHub Workflow, Quality Standards, Governance
+- Version change: 1.0.0 → 1.1.0
+- Modified principles:
+  * I. GitHub Workflow Discipline - EXPANDED with mandatory requirements:
+    - Added ABSOLUTE RULE: NO WORK WITHOUT A GITHUB ISSUE
+    - Added PROHIBITION: Code changes without issue are STRICTLY FORBIDDEN
+    - Added Branch Cleanup MANDATORY section with specific git commands
+    - Added Workflow Completion requirement before starting new work
+- Added sections:
+  * Issue Closure and Branch Cleanup (expanded subsection of Principle I)
 - Removed sections: N/A
 - Templates requiring updates:
   ✅ .specify/templates/plan-template.md - Constitution Check section compatible
   ✅ .specify/templates/spec-template.md - Requirements section compatible
   ✅ .specify/templates/tasks-template.md - Testing gates compatible
-- Follow-up TODOs: None
+  ⚠️ .specify/templates/commands/*.md - Commands should verify issue existence before work
+  ⚠️ README.md or quickstart docs - Should document branch cleanup workflow
+- Follow-up TODOs:
+  * Consider adding pre-commit hook to verify current branch links to a GitHub issue
+  * Consider adding GitHub Actions automation for branch deletion after PR merge
 -->
 
 # F5 XC CE Terraform Constitution
@@ -17,18 +27,20 @@ Sync Impact Report:
 
 ### I. GitHub Workflow Discipline (NON-NEGOTIABLE)
 
-**No code modifications are permitted without following the complete GitHub workflow:**
+**ABSOLUTE RULE: NO WORK WITHOUT A GITHUB ISSUE. All code modifications MUST follow the complete GitHub workflow:**
 
-- **Issue Creation REQUIRED**: Before ANY code change, a GitHub issue MUST be created describing:
+- **Issue Creation REQUIRED (PRE-REQUISITE)**: Before ANY code change, modification, or implementation work begins, a GitHub issue MUST be created describing:
   - The problem or feature request
   - Expected behavior and success criteria
   - Acceptance criteria for completion
   - Labels for categorization (bug, feature, enhancement, etc.)
+  - **PROHIBITION**: Writing code, creating branches, or making any changes WITHOUT an issue is STRICTLY FORBIDDEN
 
 - **Branch Strategy MANDATORY**: All work MUST occur in feature branches:
   - Branch naming: `[issue-number]-brief-description` (e.g., `42-add-logging`)
   - NEVER commit directly to `main` or `master`
   - Create branch from latest `main` before starting work
+  - Branch MUST be linked to the GitHub issue
 
 - **Pull Request REQUIRED**: All changes MUST go through pull requests:
   - PR title MUST reference issue: "Fixes #42: Add logging to auth module"
@@ -36,12 +48,19 @@ Sync Impact Report:
   - PR MUST pass all automated checks before merge
   - At least one approval REQUIRED before merge (if team size permits)
 
-- **Issue Closure**: Issues MUST only be closed when:
-  - PR is merged to main branch
-  - All acceptance criteria are met
-  - Tests pass and code is deployed/validated
+- **Issue Closure and Branch Cleanup**: After PR merge, the following MUST occur:
+  - Issue MUST be closed ONLY when:
+    - PR is merged to main branch
+    - All acceptance criteria are met
+    - Tests pass and code is deployed/validated
+  - **Branch Deletion MANDATORY**:
+    - Local feature branch MUST be deleted: `git branch -d [branch-name]`
+    - Remote feature branch MUST be deleted: `git push origin --delete [branch-name]`
+    - Git client MUST switch back to main: `git checkout main`
+    - Main branch MUST be updated: `git pull origin main`
+  - **Workflow Completion**: The cycle Issue → Branch → PR → Merge → Cleanup MUST be fully completed before starting new work
 
-**Rationale**: This workflow ensures traceability, enables collaboration, maintains project history, and prevents untracked changes from entering the codebase.
+**Rationale**: This workflow ensures traceability, enables collaboration, maintains project history, prevents untracked changes from entering the codebase, and keeps the repository clean by removing obsolete branches. The mandatory issue requirement prevents ad-hoc, undocumented changes that bypass quality gates and review processes.
 
 ### II. Code Quality Standards
 
@@ -247,11 +266,16 @@ Sync Impact Report:
 
 **Feature branches MUST follow these conventions:**
 
-- Branch from latest `main` before starting work
-- Branch naming: `[issue-number]-kebab-case-description`
-- Keep branches short-lived (<5 days of work)
-- Rebase on `main` regularly to avoid merge conflicts
-- Delete branches immediately after merge
+- **Branch Creation**: Branch from latest `main` before starting work (`git checkout -b [issue-number]-description`)
+- **Branch Naming**: `[issue-number]-kebab-case-description` (e.g., `42-add-logging`)
+- **Branch Lifecycle**: Keep branches short-lived (<5 days of work)
+- **Conflict Prevention**: Rebase on `main` regularly to avoid merge conflicts
+- **Branch Cleanup (MANDATORY)**: After PR merge, MUST execute:
+  1. Switch to main: `git checkout main`
+  2. Update main: `git pull origin main`
+  3. Delete local branch: `git branch -d [branch-name]`
+  4. Delete remote branch: `git push origin --delete [branch-name]`
+- **Verification**: Confirm branch deletion with `git branch -a` (should not show deleted branch)
 
 ### Pull Request Standards
 
@@ -392,4 +416,4 @@ Refer to `.specify/templates/` for:
 - `tasks-template.md`: Task breakdown and organization
 - `checklist-template.md`: Quality gate checklists
 
-**Version**: 1.0.0 | **Ratified**: 2025-10-21 | **Last Amended**: 2025-10-21
+**Version**: 1.1.0 | **Ratified**: 2025-10-21 | **Last Amended**: 2025-10-21
