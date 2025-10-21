@@ -1,28 +1,33 @@
 <!--
 Sync Impact Report:
-- Version change: 1.1.0 → 1.2.0
+- Version change: 1.2.0 → 1.3.0
 - Modified principles:
-  * I. GitHub Workflow Discipline - MAJOR EXPANSION with pre-work requirements:
-    - Added STEP ZERO: Issue creation MUST happen FIRST, BEFORE ANY work
-    - Reorganized workflow to emphasize issue-first sequence
-    - Added explicit PROHIBITION: Starting work without a pre-existing GitHub issue
-    - Clarified "work" includes: code changes, file edits, brainstorming, planning
-    - Strengthened enforcement: Issue must exist BEFORE branch creation
-    - Updated workflow sequence: Issue (FIRST) → Branch → PR → Merge → Cleanup
+  * VI. AI Agent Compliance - NEW SECTION added:
+    - Session Initialization Protocol: Mandatory verification on project activation
+    - Pre-Action Verification: Required checks before ANY code modification
+    - Enforcement Tools: verify-issue-context.sh script and CLAUDE.md checkpoint
+    - Violation Protocol: Step-by-step recovery when rules are broken
+    - Session Workflow Pattern: 7-step agent workflow for compliance
+    - Permitted Exceptions: Clear list of allowed actions without GitHub issue
+    - Accountability: Agent MUST state issue number, show verification output, refuse if checks fail
 - Added sections:
-  * "STEP ZERO: Issue Creation (PRE-REQUISITE)" - new subsection emphasizing issue-first workflow
+  * VI. AI Agent Compliance (MANDATORY FOR AUTOMATED WORKFLOWS) - comprehensive agent enforcement rules
+- Modified files:
+  * CLAUDE.md - Added mandatory workflow checklist at top (🚨 MANDATORY WORKFLOW section)
+  * .specify/scripts/bash/verify-issue-context.sh - NEW enforcement script created
 - Removed sections: N/A
 - Templates requiring updates:
-  ✅ .specify/templates/plan-template.md - Constitution Check section remains compatible
-  ✅ .specify/templates/spec-template.md - Requirements section remains compatible
-  ✅ .specify/templates/tasks-template.md - Testing gates remain compatible
-  ⚠️ README.md or workflow docs - Should document issue-first workflow explicitly
-  ⚠️ Agent guidance - Agents should verify issue existence before ANY work begins
+  ✅ .specify/templates/plan-template.md - No changes required, remains compatible
+  ✅ .specify/templates/spec-template.md - No changes required, remains compatible
+  ✅ .specify/templates/tasks-template.md - No changes required, remains compatible
+  ✅ CLAUDE.md - UPDATED with mandatory workflow checklist
+  ✅ verify-issue-context.sh - CREATED for automated enforcement
 - Follow-up TODOs:
-  * Update README.md or CONTRIBUTING.md to document issue-first workflow
-  * Consider adding GitHub CLI examples: "gh issue create" before any work
-  * Consider adding pre-commit hook or script to verify current branch links to GitHub issue
-  * Update agent/automation tooling to enforce issue verification before work begins
+  * Add verify-issue-context.sh to approved Bash commands (no permission required) - DONE in CLAUDE.md context
+  * Test enforcement script with various scenarios (main branch, invalid branch name, closed issue) - COMPLETED
+  * Monitor agent compliance in future sessions to validate effectiveness
+  * Consider adding pre-commit hook to run verify-issue-context.sh automatically
+  * Update README.md or CONTRIBUTING.md to document agent enforcement mechanisms
 -->
 
 # F5 XC CE Terraform Constitution
@@ -303,6 +308,66 @@ All development work MUST follow this MANDATORY workflow sequence:
 
 **Rationale**: Performance is a feature, not an afterthought. Poor performance degrades user experience, increases infrastructure costs, and limits scalability.
 
+### VI. AI Agent Compliance (MANDATORY FOR AUTOMATED WORKFLOWS)
+
+**All AI agents (including Claude Code, GitHub Copilot, automated tooling) MUST:**
+
+- **Session Initialization Protocol**:
+  - On project activation: Execute `activate_project()` → `read_memory("constitution.md")` → verify understanding
+  - Check current git branch: `git branch --show-current` MUST NOT be on main/master
+  - Verify issue context: Run `.specify/scripts/bash/verify-issue-context.sh` before ANY code modification
+  - Read CLAUDE.md mandatory workflow section for current session rules
+
+- **Pre-Action Verification** (REQUIRED before code changes):
+  - Before ANY Edit/Write/code modification tool: Verify GitHub issue exists
+  - Before creating branches: Verify issue number in branch name pattern `[issue-number]-description`
+  - Before making commits: Verify current branch links to valid GitHub issue
+  - Before opening PRs: Verify all acceptance criteria from issue are met
+
+- **Enforcement Tools**:
+  - **Verification Script**: `.specify/scripts/bash/verify-issue-context.sh`
+    - Purpose: Validate current git context has associated GitHub issue
+    - Returns: Exit code 0 (success) or 1-4 (specific violation types)
+    - MUST be executed before any implementation work begins
+    - MUST be in approved tools list (no permission required for execution)
+  - **CLAUDE.md Checkpoint**: Mandatory workflow section shown in every session
+    - Contains pre-flight checklist that MUST be followed
+    - Lists prohibited and allowed actions without GitHub issue
+    - References this constitution for complete rules
+
+- **Violation Protocol** (What to do when rules are broken):
+  - If violation detected: STOP immediately, do not proceed with work
+  - If no GitHub issue exists: Create issue FIRST using `gh issue create`
+  - If on main/master branch: Create feature branch using `git checkout -b [issue-number]-description`
+  - If branch name invalid: Rename branch or create new one with correct pattern
+  - Only resume work after ALL compliance checks pass (exit code 0 from verify script)
+
+- **Session Workflow Pattern**:
+  ```
+  1. User requests work
+  2. Agent checks: Does GitHub issue exist? (If NO → create issue)
+  3. Agent checks: On feature branch? (If NO → create branch)
+  4. Agent runs: verify-issue-context.sh (MUST return 0)
+  5. Agent proceeds: Implementation work begins
+  6. Agent commits: Reference issue number in commit messages
+  7. Agent creates PR: Link to issue, follow PR standards
+  ```
+
+- **Permitted Exceptions** (Actions allowed without issue):
+  - Reading documentation, code, or constitution
+  - Creating the GitHub issue itself
+  - Answering user questions about existing code
+  - Exploring codebase for understanding (no modifications)
+  - Running analysis or diagnostic commands (read-only operations)
+
+- **Accountability**:
+  - Agent MUST explicitly state which GitHub issue it's working on
+  - Agent MUST show verify-issue-context.sh output when starting work
+  - Agent MUST refuse to proceed if verification fails
+  - Agent MUST explain why it cannot proceed when compliance check fails
+
+**Rationale**: AI agents can execute commands and modify code at high speed, making enforcement of workflow discipline critical. Without automated checks, agents could bypass the issue-first workflow, creating untracked changes and breaking project governance. These rules ensure AI agents follow the same professional standards as human developers, maintaining project integrity, traceability, and collaboration quality.
+
 ## GitHub Workflow
 
 ### Issue Management
@@ -475,4 +540,4 @@ Refer to `.specify/templates/` for:
 - `tasks-template.md`: Task breakdown and organization
 - `checklist-template.md`: Quality gate checklists
 
-**Version**: 1.2.0 | **Ratified**: 2025-10-21 | **Last Amended**: 2025-10-21
+**Version**: 1.3.0 | **Ratified**: 2025-10-21 | **Last Amended**: 2025-10-21
