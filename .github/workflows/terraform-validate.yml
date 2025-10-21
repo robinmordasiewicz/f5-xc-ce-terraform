@@ -1,0 +1,91 @@
+name: Terraform Validate (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      terraform_version:
+        description: 'Terraform version to use'
+        required: false
+        type: string
+        default: '1.6.0'
+      working_directory:
+        description: 'Working directory for Terraform'
+        required: false
+        type: string
+        default: 'terraform/environments/dev'
+
+jobs:
+  terraform-validate:
+    name: Validate Terraform Configuration
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+
+      - name: Download Terraform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-artifacts
+          path: ${{ inputs.working_directory }}
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+
+      - name: TFLint Setup
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: TFLint Init
+        run: tflint --init
+        working-directory: .
+
+      - name: TFLint Run
+        id: tflint
+        run: tflint --recursive --format compact
+        working-directory: .
+        continue-on-error: true
+
+      - name: Validation Summary
+        run: |
+          echo "## Terraform Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.fmt.outcome }}" == "success" ]; then
+            echo "✅ **Format Check**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Format Check**: Failed" >> $GITHUB_STEP_SUMMARY
+            echo "Run \`terraform fmt -recursive\` to fix formatting issues" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.validate.outcome }}" == "success" ]; then
+            echo "✅ **Terraform Validate**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Terraform Validate**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.tflint.outcome }}" == "success" ]; then
+            echo "✅ **TFLint**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **TFLint**: Warnings or errors found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Fail on validation errors
+        if: steps.validate.outcome != 'success'
+        run: exit 1
