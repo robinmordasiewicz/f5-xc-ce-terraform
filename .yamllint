@@ -1,0 +1,100 @@
+# yamllint configuration
+# Linting rules for GitHub Actions workflows and other YAML files
+# See: https://yamllint.readthedocs.io/
+
+---
+extends: default
+
+# File patterns to lint
+# yamllint will check all .yml and .yaml files
+
+rules:
+  # Line length
+  line-length:
+    max: 120
+    level: warning
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+
+  # Indentation (2 spaces)
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+
+  # Truthy values (allow yes/no, true/false, on/off)
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
+    check-keys: false
+
+  # Comments
+  comments:
+    min-spaces-from-content: 1
+
+  comments-indentation: enable
+
+  # Document markers
+  document-start:
+    present: false
+
+  document-end: disable
+
+  # Trailing spaces
+  trailing-spaces: enable
+
+  # New line at end of file
+  new-line-at-end-of-file: enable
+
+  # New lines
+  new-lines:
+    type: unix
+
+  # Brackets
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+
+  # Braces
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+
+  # Colons
+  colons:
+    max-spaces-before: 0
+    max-spaces-after: 1
+
+  # Commas
+  commas:
+    max-spaces-before: 0
+    min-spaces-after: 1
+    max-spaces-after: 1
+
+  # Hyphens
+  hyphens:
+    max-spaces-after: 1
+
+  # Empty lines
+  empty-lines:
+    max: 2
+
+  # Key duplicates
+  key-duplicates: enable
+
+  # Quoted strings
+  quoted-strings:
+    quote-type: double
+    required: false
+    allow-quoted-quotes: true
+
+  # Octal values
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
+
+# Ignore patterns
+ignore: |
+  .git/
+  .terraform/
+  .github/
+  node_modules/
