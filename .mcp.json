@@ -12,19 +12,16 @@
       "description": "MCP server for Terraform Registry operations - browse providers, modules, and documentation"
     },
     "azure": {
-      "comment": "Official Microsoft Azure MCP Server",
+      "comment": "Official Microsoft Azure MCP Server (uses Azure CLI authentication)",
       "type": "stdio",
       "command": "npx",
       "args": [
         "-y",
-        "@azure/mcp"
+        "@azure/mcp",
+        "server",
+        "start"
       ],
-      "env": {
-        "AZURE_SUBSCRIPTION_ID": "${AZURE_SUBSCRIPTION_ID:-}",
-        "AZURE_TENANT_ID": "${AZURE_TENANT_ID:-}",
-        "AZURE_CLIENT_ID": "${AZURE_CLIENT_ID:-}"
-      },
-      "description": "Provides Azure services context including Storage, Cosmos DB, CLI tools, and resource management"
+      "description": "Provides Azure services context including Storage, Cosmos DB, CLI tools, and resource management. Authenticates using Azure CLI (az login)."
     },
     "microsoft-learn": {
       "comment": "Official Microsoft Learn MCP Server (HTTP)",
@@ -36,9 +33,9 @@
   "notes": {
     "testing": "All three requested servers have been tested using 'claude mcp add' commands and verified working with 'claude mcp list'. Configuration ready for use.",
     "terraform_server": "✅ Terraform MCP server (terraform-mcp-server v0.13.0) provides access to Terraform Registry operations. Type: stdio. Tested and verified working.",
-    "azure_server": "✅ Azure MCP server (@azure/mcp v0.9.6) provides access to Azure services. Type: stdio. Requires environment variables for authentication. Tested and verified working.",
+    "azure_server": "✅ Azure MCP server (@azure/mcp v0.9.6) provides access to Azure services. Type: stdio. Uses Azure CLI authentication (az login required). Tested and verified working without environment variables.",
     "microsoft_learn_server": "✅ Microsoft Learn MCP server (https://learn.microsoft.com/api/mcp) provides real-time access to official Microsoft documentation. Type: HTTP. Tested and verified working.",
-    "environment_variables": "Set required Azure environment variables in your shell or .env file. The ${VAR:-} syntax provides graceful fallback when variables are not set.",
+    "azure_authentication": "The Azure MCP server uses Azure CLI credentials. Ensure you are logged in with 'az login' before using this server. No environment variables required.",
     "local_overrides": "Create .mcp.local.json (gitignored) for environment-specific configurations or additional servers.",
     "adding_servers": "Use 'claude mcp add' command or manually edit this file. See https://docs.claude.com/en/docs/claude-code/mcp for details.",
     "usage": "This file serves as documentation and reference. To actually use these MCP servers with Claude Code, add them to your global MCP configuration (~/.config/claude-code/mcp.json) or use 'claude mcp add' command."

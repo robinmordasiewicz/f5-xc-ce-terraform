@@ -124,12 +124,13 @@ All three servers have been tested using `claude mcp add` and verified with `cla
 **Package**: `@azure/mcp` (Official Microsoft, version 0.9.6)
 - **Type**: stdio
 - **Description**: Provides context for Azure Storage, Cosmos DB, CLI tools, and resource management
-- **Install**: `npx -y @azure/mcp`
-- **Required environment variables**:
-  - `AZURE_SUBSCRIPTION_ID`
-  - `AZURE_TENANT_ID`
-  - `AZURE_CLIENT_ID`
-- **Test result**: ✓ Connected successfully
+- **Install**: `npx -y @azure/mcp server start`
+- **Authentication**: Uses Azure CLI (`az login` required)
+- **Prerequisites**:
+  - Azure CLI installed and configured
+  - Authenticated with `az login`
+  - No environment variables required
+- **Test result**: ✓ Connected successfully with Azure CLI authentication
 
 #### 3. Microsoft Learn MCP Server ✅ (Tested & Working)
 
