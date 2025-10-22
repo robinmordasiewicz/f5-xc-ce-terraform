@@ -59,7 +59,12 @@ For local development or testing without GitHub Actions, you can deploy directly
 ./scripts/setup-backend.sh
 ```
 
-Note the output values (storage account name, resource group, etc.) - you'll need these for backend configuration.
+The script will:
+- Create Azure storage account and container for Terraform state
+- Attempt to create service principal for GitHub Actions (if you have permissions)
+- **Automatically generate `backend.local.hcl`** with correct values if service principal setup fails or is skipped
+
+**Note**: If you don't have permissions to create service principals, the script will automatically fall back to manual CLI workflow and generate the backend configuration file for you.
 
 ### 2. Authenticate with Azure CLI
 
@@ -68,23 +73,16 @@ az login
 az account set --subscription <your-subscription-id>
 ```
 
-### 3. Configure Backend
+### 3. Configure Terraform Variables
 
 ```bash
 cd terraform/environments/dev
-cp backend.local.hcl.example backend.local.hcl
-# Edit backend.local.hcl with your storage account details from step 1
-```
-
-### 4. Configure Terraform Variables
-
-```bash
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your F5 XC and Azure configuration
 export TF_VAR_f5_xc_api_token="your-xc-api-token"
 ```
 
-### 5. Deploy Infrastructure
+### 4. Deploy Infrastructure
 
 ```bash
 terraform init -backend-config=backend.local.hcl
@@ -92,7 +90,7 @@ terraform plan
 terraform apply
 ```
 
-### 6. Destroy Infrastructure (when needed)
+### 5. Destroy Infrastructure (when needed)
 
 ```bash
 terraform destroy
