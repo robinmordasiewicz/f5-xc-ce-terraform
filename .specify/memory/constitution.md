@@ -1,33 +1,27 @@
 <!--
 Sync Impact Report:
-- Version change: 1.2.0 → 1.3.0
+- Version change: 1.3.0 → 1.4.0
 - Modified principles:
-  * VI. AI Agent Compliance - NEW SECTION added:
-    - Session Initialization Protocol: Mandatory verification on project activation
-    - Pre-Action Verification: Required checks before ANY code modification
-    - Enforcement Tools: verify-issue-context.sh script and CLAUDE.md checkpoint
-    - Violation Protocol: Step-by-step recovery when rules are broken
-    - Session Workflow Pattern: 7-step agent workflow for compliance
-    - Permitted Exceptions: Clear list of allowed actions without GitHub issue
-    - Accountability: Agent MUST state issue number, show verification output, refuse if checks fail
+  * VI. AI Agent Compliance - EXPANDED with new subsection:
+    - NEW: Implicit Work Requests - Clarifies that error reports automatically trigger fix workflow
+    - Automatic Response Protocol: 8-step process for handling error reports
+    - Types of Implicit Work Requests: 6 categories that trigger automatic workflow
+    - Confirmation Required For: 5 scenarios where agent must ask before proceeding
+    - Rationale: Error reports are implicit fix requests, asking for confirmation adds unnecessary friction
 - Added sections:
-  * VI. AI Agent Compliance (MANDATORY FOR AUTOMATED WORKFLOWS) - comprehensive agent enforcement rules
+  * VI. AI Agent Compliance → Implicit Work Requests (NEW SUBSECTION)
 - Modified files:
-  * CLAUDE.md - Added mandatory workflow checklist at top (🚨 MANDATORY WORKFLOW section)
-  * .specify/scripts/bash/verify-issue-context.sh - NEW enforcement script created
+  * CLAUDE.md - UPDATED with implicit work requests section showing automatic workflow triggers
 - Removed sections: N/A
 - Templates requiring updates:
   ✅ .specify/templates/plan-template.md - No changes required, remains compatible
   ✅ .specify/templates/spec-template.md - No changes required, remains compatible
   ✅ .specify/templates/tasks-template.md - No changes required, remains compatible
-  ✅ CLAUDE.md - UPDATED with mandatory workflow checklist
-  ✅ verify-issue-context.sh - CREATED for automated enforcement
+  ✅ CLAUDE.md - UPDATED with implicit work request guidance in mandatory workflow section
 - Follow-up TODOs:
-  * Add verify-issue-context.sh to approved Bash commands (no permission required) - DONE in CLAUDE.md context
-  * Test enforcement script with various scenarios (main branch, invalid branch name, closed issue) - COMPLETED
-  * Monitor agent compliance in future sessions to validate effectiveness
-  * Consider adding pre-commit hook to run verify-issue-context.sh automatically
-  * Update README.md or CONTRIBUTING.md to document agent enforcement mechanisms
+  * Monitor agent behavior when users report errors to validate automatic workflow initiation
+  * Track compliance with new implicit work request protocol in future sessions
+  * Refine confirmation criteria based on real-world usage patterns
 -->
 
 # F5 XC CE Terraform Constitution
@@ -360,6 +354,36 @@ All development work MUST follow this MANDATORY workflow sequence:
   - Exploring codebase for understanding (no modifications)
   - Running analysis or diagnostic commands (read-only operations)
 
+- **Implicit Work Requests** (Automatic Workflow Initiation):
+  - **Error Reports ARE Work Requests**: When a user reports an error, bug, failure, or unexpected behavior, this IS an implicit request to fix the problem
+  - **Automatic Response Protocol**: Agent MUST automatically:
+    1. Acknowledge the error report
+    2. Create GitHub issue documenting the problem (if none exists)
+    3. Create feature branch with issue number
+    4. Run verification checks (verify-issue-context.sh)
+    5. Investigate root cause
+    6. Implement fix
+    7. Add/update tests to prevent regression
+    8. Submit PR with fix
+  - **DO NOT ASK**: "Would you like me to create an issue/branch/fix/PR?" - The error report itself IS the request
+
+  - **Types of Implicit Work Requests** (automatically trigger workflow):
+    - Error reports ("This is broken", "Getting error X", "Feature Y doesn't work")
+    - Bug descriptions ("When I do X, Y happens instead of Z")
+    - Test failures ("Tests are failing", "Build is broken")
+    - Performance issues ("This is slow", "System is timing out")
+    - Security vulnerabilities ("Found security issue in module X")
+    - Regression reports ("This used to work but now doesn't")
+
+  - **Confirmation REQUIRED For** (ask before proceeding):
+    - Major architectural changes affecting multiple systems
+    - Breaking changes that affect public APIs or user workflows
+    - Destructive operations (data deletion, resource removal)
+    - Changes requiring significant time investment (>4 hours estimated)
+    - Ambiguous requirements where multiple valid solutions exist
+
+  - **Rationale**: Error reports are implicit fix requests - asking "Would you like me to fix this?" adds unnecessary friction and contradicts professional software development practice. When a developer reports a bug, the expected response is to fix it following proper workflow, not to ask permission to follow the workflow.
+
 - **Accountability**:
   - Agent MUST explicitly state which GitHub issue it's working on
   - Agent MUST show verify-issue-context.sh output when starting work
@@ -540,4 +564,4 @@ Refer to `.specify/templates/` for:
 - `tasks-template.md`: Task breakdown and organization
 - `checklist-template.md`: Quality gate checklists
 
-**Version**: 1.3.0 | **Ratified**: 2025-10-21 | **Last Amended**: 2025-10-21
+**Version**: 1.4.0 | **Ratified**: 2025-10-21 | **Last Amended**: 2025-10-21

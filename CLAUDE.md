@@ -34,6 +34,22 @@
 - Answering questions about the codebase
 - Exploring and understanding existing code
 
+**🔄 IMPLICIT WORK REQUESTS (Automatic Workflow Trigger):**
+When a user reports any of the following, **automatically** create issue → branch → fix → test → PR (DO NOT ASK):
+- Error reports ("This is broken", "Getting error X")
+- Bug descriptions ("When I do X, Y happens instead of Z")
+- Test failures ("Tests are failing", "Build is broken")
+- Performance issues ("This is slow", "System is timing out")
+- Security vulnerabilities ("Found security issue")
+- Regression reports ("This used to work but now doesn't")
+
+**⚠️ CONFIRMATION REQUIRED before proceeding:**
+- Major architectural changes affecting multiple systems
+- Breaking changes that affect public APIs or workflows
+- Destructive operations (data deletion, resource removal)
+- Changes requiring >4 hours estimated effort
+- Ambiguous requirements with multiple valid solutions
+
 **📖 Full Constitution**: See `.specify/memory/constitution.md` for complete workflow rules, quality standards, and testing requirements.
 
 ---
