@@ -108,16 +108,37 @@ This repository includes MCP (Model Context Protocol) server configuration for e
 
 ### Available MCP Servers
 
-**Azure MCP Server** (Official Microsoft)
-- Provides context for Azure Storage, Cosmos DB, CLI tools, and resource management
-- Package: `@azure/mcp` (version 0.9.6+)
-- Install: `npx -y @azure/mcp`
-- Required environment variables:
+All three servers have been tested using `claude mcp add` and verified with `claude mcp list`.
+
+#### 1. Terraform MCP Server ✅ (Tested & Working)
+
+**Package**: `terraform-mcp-server` (version 0.13.0)
+- **Type**: stdio
+- **Description**: Provides access to Terraform Registry operations - browse providers, modules, and documentation
+- **Install**: `npx -y terraform-mcp-server`
+- **Environment variables**: None required
+- **Test result**: ✓ Connected successfully
+
+#### 2. Azure MCP Server ✅ (Tested & Working)
+
+**Package**: `@azure/mcp` (Official Microsoft, version 0.9.6)
+- **Type**: stdio
+- **Description**: Provides context for Azure Storage, Cosmos DB, CLI tools, and resource management
+- **Install**: `npx -y @azure/mcp`
+- **Required environment variables**:
   - `AZURE_SUBSCRIPTION_ID`
   - `AZURE_TENANT_ID`
   - `AZURE_CLIENT_ID`
+- **Test result**: ✓ Connected successfully
 
-**Note**: Terraform and Microsoft Learn MCP servers are not currently available in the official MCP registry.
+#### 3. Microsoft Learn MCP Server ✅ (Tested & Working)
+
+**URL**: `https://learn.microsoft.com/api/mcp` (Official Microsoft)
+- **Type**: HTTP
+- **Description**: AI assistant with real-time access to official Microsoft documentation and learning resources
+- **Install**: `claude mcp add --transport http microsoft-learn https://learn.microsoft.com/api/mcp`
+- **Environment variables**: None required
+- **Test result**: ✓ Connected successfully
 
 ### Using with Claude Code
 

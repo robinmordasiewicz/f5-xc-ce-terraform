@@ -1,6 +1,16 @@
 {
   "$schema": "https://modelcontextprotocol.io/schema/mcp-config.json",
   "mcpServers": {
+    "terraform": {
+      "comment": "Terraform Registry MCP Server",
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "terraform-mcp-server"
+      ],
+      "description": "MCP server for Terraform Registry operations - browse providers, modules, and documentation"
+    },
     "azure": {
       "comment": "Official Microsoft Azure MCP Server",
       "type": "stdio",
@@ -15,11 +25,19 @@
         "AZURE_CLIENT_ID": "${AZURE_CLIENT_ID:-}"
       },
       "description": "Provides Azure services context including Storage, Cosmos DB, CLI tools, and resource management"
+    },
+    "microsoft-learn": {
+      "comment": "Official Microsoft Learn MCP Server (HTTP)",
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp",
+      "description": "AI assistant with real-time access to official Microsoft documentation and learning resources"
     }
   },
   "notes": {
-    "terraform_server": "A dedicated Terraform MCP server is not currently available in the official MCP server registry. For Terraform assistance, AI tools can use general code understanding and the Azure MCP server for Azure-specific Terraform resources.",
-    "microsoft_learn_server": "A dedicated Microsoft Learn MCP server is not currently available. Consider using web search capabilities or the Azure MCP server which includes documentation references.",
+    "testing": "All three requested servers have been tested using 'claude mcp add' commands and verified working with 'claude mcp list'. Configuration ready for use.",
+    "terraform_server": "✅ Terraform MCP server (terraform-mcp-server v0.13.0) provides access to Terraform Registry operations. Type: stdio. Tested and verified working.",
+    "azure_server": "✅ Azure MCP server (@azure/mcp v0.9.6) provides access to Azure services. Type: stdio. Requires environment variables for authentication. Tested and verified working.",
+    "microsoft_learn_server": "✅ Microsoft Learn MCP server (https://learn.microsoft.com/api/mcp) provides real-time access to official Microsoft documentation. Type: HTTP. Tested and verified working.",
     "environment_variables": "Set required Azure environment variables in your shell or .env file. The ${VAR:-} syntax provides graceful fallback when variables are not set.",
     "local_overrides": "Create .mcp.local.json (gitignored) for environment-specific configurations or additional servers.",
     "adding_servers": "Use 'claude mcp add' command or manually edit this file. See https://docs.claude.com/en/docs/claude-code/mcp for details.",
