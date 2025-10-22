@@ -103,9 +103,14 @@ fi
 RESOURCE_GROUP="${RESOURCE_GROUP:-${AZURE_USERNAME}-${GITHUB_REPO}-tfstate}"
 LOCATION="${LOCATION:-eastus}"
 # Storage account: lowercase alphanumeric only, 3-24 chars, globally unique
-# Use hash of username for uniqueness, add 'tf' suffix = max 24 chars
-USER_HASH=$(echo -n "${AZURE_USERNAME}" | md5sum | cut -c1-22)
-STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-${USER_HASH}tf}"
+# Format: tfstate + username_prefix(8) + unique_hash(8) = 23 chars total
+if [ -z "$STORAGE_ACCOUNT" ]; then
+  # Truncate username to first 8 chars
+  USERNAME_PREFIX=$(echo "$AZURE_USERNAME" | cut -c1-8)
+  # Create 8-char hash from username+subscription for uniqueness and determinism
+  UNIQUE_HASH=$(echo -n "${AZURE_USERNAME}${SUBSCRIPTION_ID}" | md5sum | cut -c1-8)
+  STORAGE_ACCOUNT="tfstate${USERNAME_PREFIX}${UNIQUE_HASH}"
+fi
 # Container: lowercase alphanumeric + hyphens, 3-63 chars, add '-tf' suffix
 CONTAINER_BASE=$(echo -n "${AZURE_USERNAME}-${GITHUB_REPO}" | tr '[:upper:]' '[:lower:]')
 CONTAINER_NAME="${CONTAINER_NAME:-$(echo $CONTAINER_BASE | cut -c1-60)-tf}"
