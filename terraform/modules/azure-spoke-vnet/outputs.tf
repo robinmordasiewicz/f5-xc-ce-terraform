@@ -21,8 +21,8 @@ output "peering_id" {
 }
 
 output "peering_status" {
-  description = "Status of the VNET peering"
-  value       = azurerm_virtual_network_peering.spoke_to_hub.peering_state
+  description = "Status of the VNET peering (ID indicates peering exists)"
+  value       = azurerm_virtual_network_peering.spoke_to_hub.id
 }
 
 output "route_table_id" {
