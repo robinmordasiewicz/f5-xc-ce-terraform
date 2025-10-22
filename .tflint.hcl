@@ -3,8 +3,8 @@
 # See: https://github.com/terraform-linters/tflint
 
 config {
-  # Enable module inspection
-  module = true
+  # Enable module inspection (all: inspect all modules)
+  call_module_type = "all"
 
   # Force initialization (download plugins)
   force = false
@@ -94,26 +94,8 @@ rule "terraform_standard_module_structure" {
 
 # Azure-specific rules
 # --------------------
-
-# Enforce VM naming conventions
-rule "azurerm_virtual_machine_name" {
-  enabled = true
-}
-
-# Enforce resource group naming
-rule "azurerm_resource_group_name" {
-  enabled = true
-}
-
-# Enforce VNET naming
-rule "azurerm_virtual_network_name" {
-  enabled = true
-}
-
-# Enforce subnet naming
-rule "azurerm_subnet_name" {
-  enabled = true
-}
+# Note: Naming conventions are enforced by terraform_naming_convention above.
+# Azure ruleset focuses on attribute validation, not naming patterns.
 
 # Disabled rules (with justification)
 # -----------------------------------

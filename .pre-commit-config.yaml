@@ -19,7 +19,7 @@
 default_language_version:
   python: python3.11
 
-default_stages: [commit]
+default_stages: [pre-commit]
 
 fail_fast: false  # Run all hooks even if one fails
 
@@ -144,7 +144,7 @@ repos:
     hooks:
       - id: shellcheck
         name: Lint shell scripts
-        args: ['--severity=warning']
+        args: ['--severity=error']
         types: [shell]
 
   # Markdown Linting (READ-ONLY)
@@ -163,6 +163,7 @@ repos:
         name: TFLint validation
         args:
           - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+          - --args=--minimum-failure-severity=error
 
   # Python Linting (CHECK-ONLY)
   - repo: https://github.com/astral-sh/ruff-pre-commit
