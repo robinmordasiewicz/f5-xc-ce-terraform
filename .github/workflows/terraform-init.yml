@@ -1,0 +1,86 @@
+name: Terraform Init (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      terraform_version:
+        description: 'Terraform version to use'
+        required: false
+        type: string
+        default: '1.6.0'
+      working_directory:
+        description: 'Working directory for Terraform'
+        required: false
+        type: string
+        default: 'terraform/environments/dev'
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+      ARM_RESOURCE_GROUP_NAME:
+        required: true
+      ARM_STORAGE_ACCOUNT_NAME:
+        required: true
+      ARM_CONTAINER_NAME:
+        required: true
+      ARM_KEY:
+        required: true
+
+jobs:
+  terraform-init:
+    name: Initialize Terraform
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write  # Required for OIDC
+      contents: read
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+
+      - name: Azure Login via OIDC
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_RESOURCE_GROUP_NAME: ${{ secrets.ARM_RESOURCE_GROUP_NAME }}
+          ARM_STORAGE_ACCOUNT_NAME: ${{ secrets.ARM_STORAGE_ACCOUNT_NAME }}
+          ARM_CONTAINER_NAME: ${{ secrets.ARM_CONTAINER_NAME }}
+          ARM_KEY: ${{ secrets.ARM_KEY }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=$ARM_RESOURCE_GROUP_NAME" \
+            -backend-config="storage_account_name=$ARM_STORAGE_ACCOUNT_NAME" \
+            -backend-config="container_name=$ARM_CONTAINER_NAME" \
+            -backend-config="key=$ARM_KEY" \
+            -backend-config="use_oidc=true"
+
+      - name: Upload Terraform artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-artifacts
+          path: |
+            ${{ inputs.working_directory }}/.terraform
+            ${{ inputs.working_directory }}/.terraform.lock.hcl
+          retention-days: 1

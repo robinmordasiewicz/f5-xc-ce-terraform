@@ -1,0 +1,192 @@
+name: Terraform Apply (Main Branch Deployment)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-*.yml'
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
+jobs:
+  terraform-init:
+    name: Initialize
+    uses: ./.github/workflows/terraform-init.yml
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_RESOURCE_GROUP_NAME: ${{ secrets.ARM_RESOURCE_GROUP_NAME }}
+      ARM_STORAGE_ACCOUNT_NAME: ${{ secrets.ARM_STORAGE_ACCOUNT_NAME }}
+      ARM_CONTAINER_NAME: ${{ secrets.ARM_CONTAINER_NAME }}
+      ARM_KEY: ${{ secrets.ARM_KEY }}
+
+  terraform-validate:
+    name: Validate
+    needs: terraform-init
+    uses: ./.github/workflows/terraform-validate.yml
+
+  terraform-plan:
+    name: Plan Changes
+    needs: terraform-validate
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform/environments/dev
+
+    outputs:
+      has_changes: ${{ steps.plan.outputs.has_changes }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.6.0'
+
+      - name: Download Terraform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-artifacts
+          path: terraform/environments/dev
+
+      - name: Azure Login via OIDC
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Plan
+        id: plan
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_f5_xc_api_token: ${{ secrets.F5_XC_API_TOKEN }}
+        run: |
+          terraform plan -out=tfplan -detailed-exitcode || echo "exitcode=$?" >> $GITHUB_OUTPUT
+          # Exit code 2 means changes detected, which is expected
+          if [ "${exitcode:-0}" == "2" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            exit 0
+          elif [ "${exitcode:-0}" == "0" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            exit 1
+          fi
+
+      - name: Upload Plan
+        if: steps.plan.outputs.has_changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-apply-plan
+          path: terraform/environments/dev/tfplan
+          retention-days: 1
+
+  terraform-apply:
+    name: Apply Infrastructure Changes
+    needs: terraform-plan
+    if: needs.terraform-plan.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+
+    environment:
+      name: production
+      url: https://portal.azure.com
+
+    defaults:
+      run:
+        working-directory: terraform/environments/dev
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.6.0'
+
+      - name: Download Terraform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-artifacts
+          path: terraform/environments/dev
+
+      - name: Download Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-apply-plan
+          path: terraform/environments/dev
+
+      - name: Azure Login via OIDC
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Apply
+        id: apply
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_f5_xc_api_token: ${{ secrets.F5_XC_API_TOKEN }}
+        run: |
+          echo "## 🚀 Terraform Apply Started" >> $GITHUB_STEP_SUMMARY
+          echo "**Time**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          terraform apply -auto-approve tfplan | tee apply.txt
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Terraform Apply Completed" >> $GITHUB_STEP_SUMMARY
+          echo "**Time**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+      - name: Extract Outputs
+        id: outputs
+        run: |
+          terraform output -json > outputs.json
+          cat outputs.json >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Apply Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-apply-log
+          path: terraform/environments/dev/apply.txt
+          retention-days: 30
+
+      - name: Deployment Summary
+        run: |
+          echo "## 📊 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ✅ Success" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: Production" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+  no-changes:
+    name: No Changes Detected
+    needs: terraform-plan
+    if: needs.terraform-plan.outputs.has_changes == 'false'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: No Changes Message
+        run: |
+          echo "## ℹ️ No Infrastructure Changes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Terraform detected no changes to apply." >> $GITHUB_STEP_SUMMARY
+          echo "Infrastructure is already in the desired state." >> $GITHUB_STEP_SUMMARY

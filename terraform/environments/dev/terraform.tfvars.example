@@ -1,0 +1,104 @@
+# Terraform Variables Example - Development Environment
+# Copy this file to terraform.tfvars and update with your values
+# WARNING: terraform.tfvars is gitignored - never commit it with secrets
+
+# Azure Configuration
+# -------------------
+
+# Azure region for resource deployment
+# See: https://azure.microsoft.com/en-us/explore/global-infrastructure/geographies/
+azure_region = "eastus"
+
+# Resource group name for all infrastructure
+resource_group_name = "xc-ce-dev-rg"
+
+# Prefix for all resource names
+prefix = "xc-ce-dev"
+
+# Hub VNET Configuration
+# ----------------------
+
+# Hub VNET address space (where CE AppStack NVAs reside)
+hub_vnet_address_space = ["10.0.0.0/16"]
+
+# NVA subnet for CE AppStack instances (minimum /26 for CE requirements)
+hub_nva_subnet_prefix = "10.0.1.0/26"
+
+# Management subnet for operational access
+hub_mgmt_subnet_prefix = "10.0.2.0/24"
+
+# Spoke VNET Configuration
+# ------------------------
+
+# Spoke VNET address space (workload networks)
+spoke_vnet_address_space = ["10.1.0.0/16"]
+
+# Workload subnet
+spoke_workload_subnet_prefix = "10.1.1.0/24"
+
+# Load Balancer Configuration
+# ---------------------------
+
+# Frontend IP for internal load balancer (from NVA subnet)
+lb_frontend_ip = "10.0.1.4"
+
+# Hub NVA IP for spoke routing (same as LB frontend IP)
+hub_nva_ip = "10.0.1.4"
+
+# F5 XC Configuration
+# -------------------
+
+# F5 XC tenant name (your F5 XC console URL: <tenant>.console.ves.volterra.io)
+f5_xc_tenant = "your-tenant-name"
+
+# F5 XC namespace (typically "system" for CE sites)
+f5_xc_namespace = "system"
+
+# F5 XC API token (REQUIRED - set via environment variable or GitHub secret)
+# DO NOT hardcode here - use one of:
+#   export TF_VAR_f5_xc_api_token="your-api-token"
+#   OR in GitHub Actions: ${{ secrets.F5_XC_API_TOKEN }}
+#
+# To generate API token:
+#   1. Login to F5 XC Console: https://<tenant>.console.ves.volterra.io
+#   2. Navigate to: Administration > Personal Management > Credentials
+#   3. Click "Add Credentials" > API Token
+#   4. Copy the token value
+#
+# f5_xc_api_token = "CHANGE_ME_USE_ENV_VAR_INSTEAD"
+
+# CE VM Configuration
+# -------------------
+
+# VM size for CE instances (minimum: Standard_D8s_v3 = 8 vCPUs, 32 GB RAM)
+# See: https://docs.cloud.f5.com/docs/how-to/site-management/create-azure-site#azure-certified-hardware
+ce_vm_size = "Standard_D8s_v3"
+
+# SSH public key for CE VM access (REQUIRED)
+# Generate with: ssh-keygen -t rsa -b 4096 -f ~/.ssh/ce-azure-key
+# Then copy the public key: cat ~/.ssh/ce-azure-key.pub
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC... your-public-key-here"
+
+# Tags
+# ----
+
+# Common tags applied to all resources
+tags = {
+  environment = "dev"
+  managed_by  = "terraform"
+  project     = "f5-xc-ce-azure"
+  owner       = "your-name"
+}
+
+# Terraform State Backend Configuration
+# --------------------------------------
+# Backend is configured via backend.tf with environment variables in GitHub Actions
+# For local development, create a backend-config.hcl file:
+#
+# resource_group_name  = "terraform-state-rg"
+# storage_account_name = "tfstatexccedev"
+# container_name       = "tfstate"
+# key                  = "dev/terraform.tfstate"
+# use_oidc             = true
+#
+# Then run: terraform init -backend-config=backend-config.hcl

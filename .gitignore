@@ -5,8 +5,13 @@
 *.tfstate
 *.tfstate.*
 *.tfvars
+!terraform.tfvars.example
 .terraform/
 .terraform.lock.hcl
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
 # Crash log files
 crash.log
@@ -15,9 +20,18 @@ crash.*.log
 # Sensitive files
 *.pem
 *.key
+*.pfx
+*.p12
 secrets/
 .env
 .env.local
+
+# Azure CLI
+.azure/
+
+# F5 XC
+*.reg
+registration_token
 
 # OS files
 .DS_Store

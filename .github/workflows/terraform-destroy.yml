@@ -1,0 +1,154 @@
+name: Terraform Destroy (Infrastructure Decommission)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+      confirmation:
+        description: 'Type "DESTROY" to confirm infrastructure destruction'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
+jobs:
+  validate-confirmation:
+    name: Validate Destruction Confirmation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirmation }}" != "DESTROY" ]; then
+            echo "❌ Invalid confirmation. Type 'DESTROY' to proceed." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          echo "✅ Destruction confirmed" >> $GITHUB_STEP_SUMMARY
+
+  terraform-init:
+    name: Initialize
+    needs: validate-confirmation
+    uses: ./.github/workflows/terraform-init.yml
+    with:
+      working_directory: terraform/environments/${{ github.event.inputs.environment }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_RESOURCE_GROUP_NAME: ${{ secrets.ARM_RESOURCE_GROUP_NAME }}
+      ARM_STORAGE_ACCOUNT_NAME: ${{ secrets.ARM_STORAGE_ACCOUNT_NAME }}
+      ARM_CONTAINER_NAME: ${{ secrets.ARM_CONTAINER_NAME }}
+      ARM_KEY: ${{ secrets.ARM_KEY }}
+
+  terraform-destroy:
+    name: Destroy Infrastructure
+    needs: terraform-init
+    runs-on: ubuntu-latest
+
+    environment:
+      name: ${{ github.event.inputs.environment }}-destroy
+
+    defaults:
+      run:
+        working-directory: terraform/environments/${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.6.0'
+
+      - name: Download Terraform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-artifacts
+          path: terraform/environments/${{ github.event.inputs.environment }}
+
+      - name: Azure Login via OIDC
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Destroy Plan
+        id: destroy_plan
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_f5_xc_api_token: ${{ secrets.F5_XC_API_TOKEN }}
+        run: |
+          echo "## 🗑️ Terraform Destroy Plan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          terraform plan -destroy -out=destroy.tfplan | tee destroy_plan.txt
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Review Destruction Plan
+        run: |
+          echo "## ⚠️ Resources to be Destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Review the plan above before destruction proceeds." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Time**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+      - name: Terraform Destroy
+        id: destroy
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_f5_xc_api_token: ${{ secrets.F5_XC_API_TOKEN }}
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 💥 Destruction In Progress" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          terraform apply -auto-approve destroy.tfplan | tee destroy.txt
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Infrastructure Destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "**Completed**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Destroy Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-destroy-log-${{ github.event.inputs.environment }}
+          path: terraform/environments/${{ github.event.inputs.environment }}/destroy.txt
+          retention-days: 90
+
+      - name: Cleanup Orphaned Resources
+        if: success()
+        run: |
+          echo "## 🧹 Cleanup Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Run \`scripts/cleanup-orphaned-resources.sh\` if needed to clean up any orphaned resources." >> $GITHUB_STEP_SUMMARY
+
+      - name: Destruction Summary
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Destruction Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ✅ Destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Confirmation**: ${{ github.event.inputs.confirmation }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Note**: This action is irreversible. State file has been updated to reflect destruction." >> $GITHUB_STEP_SUMMARY

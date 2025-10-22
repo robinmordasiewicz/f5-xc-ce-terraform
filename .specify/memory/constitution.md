@@ -1,14 +1,27 @@
 <!--
 Sync Impact Report:
-- Version change: Initial creation → 1.0.0
-- Modified principles: N/A (initial version)
-- Added sections: Core Principles (5), GitHub Workflow, Quality Standards, Governance
+- Version change: 1.3.0 → 1.4.0
+- Modified principles:
+  * VI. AI Agent Compliance - EXPANDED with new subsection:
+    - NEW: Implicit Work Requests - Clarifies that error reports automatically trigger fix workflow
+    - Automatic Response Protocol: 8-step process for handling error reports
+    - Types of Implicit Work Requests: 6 categories that trigger automatic workflow
+    - Confirmation Required For: 5 scenarios where agent must ask before proceeding
+    - Rationale: Error reports are implicit fix requests, asking for confirmation adds unnecessary friction
+- Added sections:
+  * VI. AI Agent Compliance → Implicit Work Requests (NEW SUBSECTION)
+- Modified files:
+  * CLAUDE.md - UPDATED with implicit work requests section showing automatic workflow triggers
 - Removed sections: N/A
 - Templates requiring updates:
-  ✅ .specify/templates/plan-template.md - Constitution Check section compatible
-  ✅ .specify/templates/spec-template.md - Requirements section compatible
-  ✅ .specify/templates/tasks-template.md - Testing gates compatible
-- Follow-up TODOs: None
+  ✅ .specify/templates/plan-template.md - No changes required, remains compatible
+  ✅ .specify/templates/spec-template.md - No changes required, remains compatible
+  ✅ .specify/templates/tasks-template.md - No changes required, remains compatible
+  ✅ CLAUDE.md - UPDATED with implicit work request guidance in mandatory workflow section
+- Follow-up TODOs:
+  * Monitor agent behavior when users report errors to validate automatic workflow initiation
+  * Track compliance with new implicit work request protocol in future sessions
+  * Refine confirmation criteria based on real-world usage patterns
 -->
 
 # F5 XC CE Terraform Constitution
@@ -17,35 +30,149 @@ Sync Impact Report:
 
 ### I. GitHub Workflow Discipline (NON-NEGOTIABLE)
 
-**No code modifications are permitted without following the complete GitHub workflow:**
+**ABSOLUTE RULE: ISSUE CREATION IS STEP ZERO. NO WORK MAY BEGIN WITHOUT A PRE-EXISTING GITHUB ISSUE.**
 
-- **Issue Creation REQUIRED**: Before ANY code change, a GitHub issue MUST be created describing:
-  - The problem or feature request
+All development work MUST follow this MANDATORY workflow sequence:
+
+#### STEP ZERO: Issue Creation (PRE-REQUISITE - REQUIRED FIRST)
+
+**Before ANY work begins, a GitHub issue MUST be created:**
+
+- **Issue Creation REQUIRED FIRST**: Before:
+  - Any code changes, modifications, or file edits
+  - Any brainstorming, exploration, or planning activities
+  - Creating any branches
+  - Writing any implementation code
+  - Making any configuration changes
+  - Updating any documentation related to implementation
+
+- **STRICT PROHIBITION**: The following activities are ABSOLUTELY FORBIDDEN without a pre-existing GitHub issue:
+  - Starting implementation work
+  - Creating feature branches
+  - Making code commits
+  - Opening pull requests
+  - Any "exploratory coding" or "quick fixes"
+  - Ad-hoc changes to the codebase
+
+- **Issue Content Requirements**: Each issue MUST describe:
+  - The problem, bug, or feature request clearly
   - Expected behavior and success criteria
   - Acceptance criteria for completion
   - Labels for categorization (bug, feature, enhancement, etc.)
+  - Priority/severity if applicable
 
-- **Branch Strategy MANDATORY**: All work MUST occur in feature branches:
+- **Enforcement**: This rule has NO exceptions:
+  - Even "small fixes" require an issue
+  - Even "typo corrections" require an issue
+  - Even "urgent hotfixes" require an issue (created first, then fast-tracked)
+  - Emergency exceptions still require issue creation BEFORE work begins
+
+**Rationale**: Issue-first workflow ensures ALL work is tracked, documented, reviewed, and traceable. It prevents undocumented changes, maintains project history, enables collaboration, and ensures every code change has justification and context. This is the foundation of professional software development discipline.
+
+#### Branch Strategy (MANDATORY - After Issue Creation)
+
+**All work MUST occur in feature branches linked to the GitHub issue:**
+
+- **Branch Creation**: ONLY after issue exists
   - Branch naming: `[issue-number]-brief-description` (e.g., `42-add-logging`)
   - NEVER commit directly to `main` or `master`
   - Create branch from latest `main` before starting work
+  - Branch MUST be linked to the GitHub issue
 
-- **Pull Request REQUIRED**: All changes MUST go through pull requests:
-  - PR title MUST reference issue: "Fixes #42: Add logging to auth module"
-  - PR description MUST link to issue and describe changes
-  - PR MUST pass all automated checks before merge
-  - At least one approval REQUIRED before merge (if team size permits)
+- **Branch Lifecycle**: Keep branches short-lived (<5 days of work)
 
-- **Issue Closure**: Issues MUST only be closed when:
+- **Conflict Prevention**: Rebase on `main` regularly to avoid merge conflicts
+
+#### Pull Request (REQUIRED - After Implementation)
+
+**All changes MUST go through pull requests:**
+
+- PR title MUST reference issue: "Fixes #42: Add logging to auth module"
+- PR description MUST link to issue and describe changes
+- PR MUST pass all automated checks before merge
+- At least one approval REQUIRED before merge (if team size permits)
+
+#### Issue Closure and Branch Cleanup (MANDATORY - After Merge)
+
+**After PR merge, the following MUST occur:**
+
+- **Issue Closure**: Issue MUST be closed ONLY when:
   - PR is merged to main branch
   - All acceptance criteria are met
   - Tests pass and code is deployed/validated
 
-**Rationale**: This workflow ensures traceability, enables collaboration, maintains project history, and prevents untracked changes from entering the codebase.
+- **Branch Deletion MANDATORY**:
+  - Local feature branch MUST be deleted: `git branch -d [branch-name]`
+  - Remote feature branch MUST be deleted: `git push origin --delete [branch-name]`
+  - Git client MUST switch back to main: `git checkout main`
+  - Main branch MUST be updated: `git pull origin main`
+
+- **Workflow Completion**: The complete cycle MUST finish before starting new work:
+  ```
+  Issue (FIRST) → Branch → Code → PR → Review → Merge → Close Issue → Delete Branch → Update Main
+  ```
+
+**Rationale**: This workflow ensures traceability, enables collaboration, maintains project history, prevents untracked changes from entering the codebase, keeps the repository clean by removing obsolete branches, and ensures every code change has proper justification and review.
 
 ### II. Code Quality Standards
 
 **All code MUST meet the following quality gates before merge:**
+
+- **Pre-commit Hooks (NON-NEGOTIABLE)**: MANDATORY validation executed before EVERY commit
+  - **Framework Required**: MUST use pre-commit framework (https://pre-commit.com)
+  - **Configuration File**: `.pre-commit-config.yaml` MUST be present in repository root
+  - **Installation Required**: ALL developers MUST install pre-commit hooks via `pre-commit install`
+  - **Comprehensive Coverage**: Hooks MUST validate ALL file types in repository:
+    - Terraform files (.tf, .tfvars): terraform_fmt, terraform_validate, terraform_docs, tflint
+    - YAML files (.yml, .yaml): yamllint, check-yaml
+    - JSON files (.json): check-json, prettier
+    - Markdown files (.md): markdownlint, prettier
+    - Shell scripts (.sh): shellcheck, shfmt
+    - Python files (.py): ruff, black (check-only), mypy
+    - Go files (.go): gofmt, golangci-lint
+    - General: trailing-whitespace, end-of-file-fixer, check-merge-conflict, detect-secrets
+
+  - **READ-ONLY VALIDATION (CRITICAL)**: Pre-commit hooks MUST ONLY validate and report errors
+    - **NO AUTO-FIX**: Hooks MUST NOT automatically fix or correct any problems
+    - **Display Errors Only**: Hooks MUST display validation errors and exit with non-zero status
+    - **Manual Fixes Required**: Developers MUST manually fix all reported errors
+    - **Configuration Enforcement**:
+      - Terraform: `terraform fmt -check` (NOT `terraform fmt -write`)
+      - Black: `black --check --diff` (NOT `black`)
+      - Prettier: `prettier --check` (NOT `prettier --write`)
+      - All formatters: Use check/diff modes, NEVER write modes
+
+  - **BYPASS FORBIDDEN (NON-NEGOTIABLE)**: Bypassing pre-commit checks is STRICTLY PROHIBITED
+    - **No --no-verify**: `git commit --no-verify` is FORBIDDEN
+    - **No Commenting Out**: Commenting out or disabling pre-commit checks is FORBIDDEN
+    - **No Skip Flags**: Using `SKIP=` environment variable is FORBIDDEN
+    - **Enforcement**: CI/CD pipeline MUST run identical checks to prevent bypass
+    - **Code Review**: Reviewers MUST reject any PR attempting to bypass or disable checks
+    - **Exception Process**: If a hook genuinely needs to be skipped (e.g., emergency hotfix):
+      1. MUST be documented in PR description with detailed justification
+      2. MUST be approved by technical lead
+      3. MUST create follow-up issue to fix violations
+      4. MUST be limited to emergency situations only
+
+  - **Hook Execution Order**: Hooks MUST run in logical dependency order
+    1. File-level checks (trailing-whitespace, end-of-file-fixer, mixed-line-ending)
+    2. Syntax validation (check-yaml, check-json, terraform_validate)
+    3. Security checks (detect-secrets, checkov security scans)
+    4. Linting (yamllint, shellcheck, tflint, markdownlint)
+    5. Formatting validation (terraform fmt -check, black --check, prettier --check)
+    6. Documentation generation checks (terraform_docs)
+
+  - **Performance Requirements**: Pre-commit hooks MUST complete in reasonable time
+    - Individual hooks: <30 seconds per file type
+    - Total pre-commit time: <2 minutes for typical commit
+    - Hooks MUST run only on staged files (not entire repository)
+    - Parallel execution MUST be enabled where possible
+
+  - **Error Reporting**: Hook failures MUST provide actionable error messages
+    - Clear indication of which file(s) failed validation
+    - Specific line numbers and error descriptions
+    - Suggested fix commands or documentation links
+    - Exit with non-zero status to block commit
 
 - **Linting**: Code MUST pass all configured linters without warnings
   - Configuration files MUST be present in repository root
@@ -70,7 +197,7 @@ Sync Impact Report:
   - Proper error handling without exposing sensitive information
   - Dependencies MUST be kept up to date
 
-**Rationale**: Quality gates prevent technical debt accumulation, reduce bugs, improve maintainability, and ensure professional code standards.
+**Rationale**: Quality gates prevent technical debt accumulation, reduce bugs, improve maintainability, and ensure professional code standards. Pre-commit hooks enforce standards at the earliest possible point (before commit), preventing quality issues from entering version control and ensuring consistent code quality across all contributors.
 
 ### III. Testing Standards (NON-NEGOTIABLE)
 
@@ -175,12 +302,103 @@ Sync Impact Report:
 
 **Rationale**: Performance is a feature, not an afterthought. Poor performance degrades user experience, increases infrastructure costs, and limits scalability.
 
+### VI. AI Agent Compliance (MANDATORY FOR AUTOMATED WORKFLOWS)
+
+**All AI agents (including Claude Code, GitHub Copilot, automated tooling) MUST:**
+
+- **Session Initialization Protocol**:
+  - On project activation: Execute `activate_project()` → `read_memory("constitution.md")` → verify understanding
+  - Check current git branch: `git branch --show-current` MUST NOT be on main/master
+  - Verify issue context: Run `.specify/scripts/bash/verify-issue-context.sh` before ANY code modification
+  - Read CLAUDE.md mandatory workflow section for current session rules
+
+- **Pre-Action Verification** (REQUIRED before code changes):
+  - Before ANY Edit/Write/code modification tool: Verify GitHub issue exists
+  - Before creating branches: Verify issue number in branch name pattern `[issue-number]-description`
+  - Before making commits: Verify current branch links to valid GitHub issue
+  - Before opening PRs: Verify all acceptance criteria from issue are met
+
+- **Enforcement Tools**:
+  - **Verification Script**: `.specify/scripts/bash/verify-issue-context.sh`
+    - Purpose: Validate current git context has associated GitHub issue
+    - Returns: Exit code 0 (success) or 1-4 (specific violation types)
+    - MUST be executed before any implementation work begins
+    - MUST be in approved tools list (no permission required for execution)
+  - **CLAUDE.md Checkpoint**: Mandatory workflow section shown in every session
+    - Contains pre-flight checklist that MUST be followed
+    - Lists prohibited and allowed actions without GitHub issue
+    - References this constitution for complete rules
+
+- **Violation Protocol** (What to do when rules are broken):
+  - If violation detected: STOP immediately, do not proceed with work
+  - If no GitHub issue exists: Create issue FIRST using `gh issue create`
+  - If on main/master branch: Create feature branch using `git checkout -b [issue-number]-description`
+  - If branch name invalid: Rename branch or create new one with correct pattern
+  - Only resume work after ALL compliance checks pass (exit code 0 from verify script)
+
+- **Session Workflow Pattern**:
+  ```
+  1. User requests work
+  2. Agent checks: Does GitHub issue exist? (If NO → create issue)
+  3. Agent checks: On feature branch? (If NO → create branch)
+  4. Agent runs: verify-issue-context.sh (MUST return 0)
+  5. Agent proceeds: Implementation work begins
+  6. Agent commits: Reference issue number in commit messages
+  7. Agent creates PR: Link to issue, follow PR standards
+  ```
+
+- **Permitted Exceptions** (Actions allowed without issue):
+  - Reading documentation, code, or constitution
+  - Creating the GitHub issue itself
+  - Answering user questions about existing code
+  - Exploring codebase for understanding (no modifications)
+  - Running analysis or diagnostic commands (read-only operations)
+
+- **Implicit Work Requests** (Automatic Workflow Initiation):
+  - **Error Reports ARE Work Requests**: When a user reports an error, bug, failure, or unexpected behavior, this IS an implicit request to fix the problem
+  - **Automatic Response Protocol**: Agent MUST automatically:
+    1. Acknowledge the error report
+    2. Create GitHub issue documenting the problem (if none exists)
+    3. Create feature branch with issue number
+    4. Run verification checks (verify-issue-context.sh)
+    5. Investigate root cause
+    6. Implement fix
+    7. Add/update tests to prevent regression
+    8. Submit PR with fix
+  - **DO NOT ASK**: "Would you like me to create an issue/branch/fix/PR?" - The error report itself IS the request
+
+  - **Types of Implicit Work Requests** (automatically trigger workflow):
+    - Error reports ("This is broken", "Getting error X", "Feature Y doesn't work")
+    - Bug descriptions ("When I do X, Y happens instead of Z")
+    - Test failures ("Tests are failing", "Build is broken")
+    - Performance issues ("This is slow", "System is timing out")
+    - Security vulnerabilities ("Found security issue in module X")
+    - Regression reports ("This used to work but now doesn't")
+
+  - **Confirmation REQUIRED For** (ask before proceeding):
+    - Major architectural changes affecting multiple systems
+    - Breaking changes that affect public APIs or user workflows
+    - Destructive operations (data deletion, resource removal)
+    - Changes requiring significant time investment (>4 hours estimated)
+    - Ambiguous requirements where multiple valid solutions exist
+
+  - **Rationale**: Error reports are implicit fix requests - asking "Would you like me to fix this?" adds unnecessary friction and contradicts professional software development practice. When a developer reports a bug, the expected response is to fix it following proper workflow, not to ask permission to follow the workflow.
+
+- **Accountability**:
+  - Agent MUST explicitly state which GitHub issue it's working on
+  - Agent MUST show verify-issue-context.sh output when starting work
+  - Agent MUST refuse to proceed if verification fails
+  - Agent MUST explain why it cannot proceed when compliance check fails
+
+**Rationale**: AI agents can execute commands and modify code at high speed, making enforcement of workflow discipline critical. Without automated checks, agents could bypass the issue-first workflow, creating untracked changes and breaking project governance. These rules ensure AI agents follow the same professional standards as human developers, maintaining project integrity, traceability, and collaboration quality.
+
 ## GitHub Workflow
 
 ### Issue Management
 
-**All work MUST originate from a GitHub issue:**
+**All work MUST originate from a GitHub issue (created FIRST):**
 
+- Issues MUST be created BEFORE any work begins
 - Issues MUST use appropriate templates (bug, feature, enhancement)
 - Issues MUST have clear acceptance criteria
 - Issues MUST be labeled for categorization and prioritization
@@ -191,11 +409,16 @@ Sync Impact Report:
 
 **Feature branches MUST follow these conventions:**
 
-- Branch from latest `main` before starting work
-- Branch naming: `[issue-number]-kebab-case-description`
-- Keep branches short-lived (<5 days of work)
-- Rebase on `main` regularly to avoid merge conflicts
-- Delete branches immediately after merge
+- **Branch Creation**: Branch from latest `main` ONLY after issue exists (`git checkout -b [issue-number]-description`)
+- **Branch Naming**: `[issue-number]-kebab-case-description` (e.g., `42-add-logging`)
+- **Branch Lifecycle**: Keep branches short-lived (<5 days of work)
+- **Conflict Prevention**: Rebase on `main` regularly to avoid merge conflicts
+- **Branch Cleanup (MANDATORY)**: After PR merge, MUST execute:
+  1. Switch to main: `git checkout main`
+  2. Update main: `git pull origin main`
+  3. Delete local branch: `git branch -d [branch-name]`
+  4. Delete remote branch: `git push origin --delete [branch-name]`
+- **Verification**: Confirm branch deletion with `git branch -a` (should not show deleted branch)
 
 ### Pull Request Standards
 
@@ -209,6 +432,7 @@ Sync Impact Report:
   - Screenshots for UI changes
   - Performance impact notes
 - **Checklist**:
+  - [ ] Issue created FIRST before work began
   - [ ] Tests added and passing
   - [ ] Documentation updated
   - [ ] No linting errors
@@ -229,7 +453,8 @@ Sync Impact Report:
 **Every PR MUST be reviewed using this checklist:**
 
 1. **Constitution Compliance**:
-   - [ ] GitHub workflow followed (issue → branch → PR)
+   - [ ] GitHub workflow followed (issue FIRST → branch → PR)
+   - [ ] Issue existed BEFORE work began
    - [ ] Tests written and passing
    - [ ] Code quality standards met
    - [ ] Performance requirements validated
@@ -267,14 +492,16 @@ Sync Impact Report:
 
 **A task is only "done" when:**
 
-1. Code is written and reviewed
-2. All tests pass (unit, integration, contract)
-3. Performance validated against requirements
-4. Documentation updated
-5. PR merged to main
-6. Issue closed with verification comment
-7. Changes deployed (if applicable)
-8. Stakeholders notified
+1. Issue created and documented FIRST
+2. Code is written and reviewed
+3. All tests pass (unit, integration, contract)
+4. Performance validated against requirements
+5. Documentation updated
+6. PR merged to main
+7. Issue closed with verification comment
+8. Changes deployed (if applicable)
+9. Branch deleted (local and remote)
+10. Stakeholders notified
 
 ## Governance
 
@@ -323,10 +550,11 @@ This constitution supersedes all other development practices and guidelines. Whe
 - Security vulnerability requires urgent patching
 
 **Exception process:**
-1. Document exception reason in PR
-2. Create follow-up issue to properly address
-3. Fast-track review with designated approver
-4. Return to normal workflow for follow-up work
+1. Create GitHub issue FIRST documenting emergency (even for hotfixes)
+2. Document exception reason in PR
+3. Create follow-up issue to properly address
+4. Fast-track review with designated approver
+5. Return to normal workflow for follow-up work
 
 ### Tools and Automation
 
@@ -336,4 +564,4 @@ Refer to `.specify/templates/` for:
 - `tasks-template.md`: Task breakdown and organization
 - `checklist-template.md`: Quality gate checklists
 
-**Version**: 1.0.0 | **Ratified**: 2025-10-21 | **Last Amended**: 2025-10-21
+**Version**: 1.4.0 | **Ratified**: 2025-10-21 | **Last Amended**: 2025-10-21
