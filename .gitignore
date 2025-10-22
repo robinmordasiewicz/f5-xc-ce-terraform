@@ -30,6 +30,9 @@ secrets/
 .env
 .env.local
 
+# MCP configuration (environment-specific)
+.mcp.local.json
+
 # Azure CLI
 .azure/
 

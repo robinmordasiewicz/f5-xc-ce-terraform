@@ -102,6 +102,76 @@ terraform destroy
 
 For detailed manual deployment guide, see **[Manual Deployment Guide](docs/manual-deployment.md)**.
 
+## AI Tool Integration
+
+This repository includes MCP (Model Context Protocol) server configuration for enhanced AI tool integration. The `.mcp.json` file defines recommended MCP servers for working with this codebase.
+
+### Available MCP Servers
+
+All three servers have been tested using `claude mcp add` and verified with `claude mcp list`.
+
+#### 1. Terraform MCP Server ✅ (Tested & Working)
+
+**Package**: `terraform-mcp-server` (version 0.13.0)
+- **Type**: stdio
+- **Description**: Provides access to Terraform Registry operations - browse providers, modules, and documentation
+- **Install**: `npx -y terraform-mcp-server`
+- **Environment variables**: None required
+- **Test result**: ✓ Connected successfully
+
+#### 2. Azure MCP Server ✅ (Tested & Working)
+
+**Package**: `@azure/mcp` (Official Microsoft, version 0.9.6)
+- **Type**: stdio
+- **Description**: Provides context for Azure Storage, Cosmos DB, CLI tools, and resource management
+- **Install**: `npx -y @azure/mcp server start`
+- **Authentication**: Uses Azure CLI (`az login` required)
+- **Prerequisites**:
+  - Azure CLI installed and configured
+  - Authenticated with `az login`
+  - No environment variables required
+- **Test result**: ✓ Connected successfully with Azure CLI authentication
+
+#### 3. Microsoft Learn MCP Server ✅ (Tested & Working)
+
+**URL**: `https://learn.microsoft.com/api/mcp` (Official Microsoft)
+- **Type**: HTTP
+- **Description**: AI assistant with real-time access to official Microsoft documentation and learning resources
+- **Install**: `claude mcp add --transport http microsoft-learn https://learn.microsoft.com/api/mcp`
+- **Environment variables**: None required
+- **Test result**: ✓ Connected successfully
+
+### Using with Claude Code
+
+To enable MCP servers in Claude Code:
+
+```bash
+# Add server to global configuration
+claude mcp add
+
+# Or manually edit ~/.config/claude-code/mcp.json
+# Copy server configuration from .mcp.json in this repository
+```
+
+### Local Overrides
+
+Create `.mcp.local.json` (gitignored) for environment-specific MCP configurations:
+
+```json
+{
+  "mcpServers": {
+    "azure": {
+      "env": {
+        "AZURE_SUBSCRIPTION_ID": "your-actual-subscription-id",
+        "AZURE_TENANT_ID": "your-actual-tenant-id"
+      }
+    }
+  }
+}
+```
+
+For more details, see [Claude Code MCP Documentation](https://docs.claude.com/en/docs/claude-code/mcp).
+
 ## What Gets Deployed
 
 - **Hub VNET**: Virtual network with CE AppStack nodes as Network Virtual Appliances
