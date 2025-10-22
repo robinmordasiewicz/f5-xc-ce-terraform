@@ -139,7 +139,8 @@ jobs:
         run: |
           echo "## 🧹 Cleanup Check" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Run \`scripts/cleanup-orphaned-resources.sh\` if needed to clean up any orphaned resources." >> $GITHUB_STEP_SUMMARY
+          echo "Run \`scripts/cleanup-orphaned-resources.sh\` if needed to " >> $GITHUB_STEP_SUMMARY
+          echo "clean up any orphaned resources." >> $GITHUB_STEP_SUMMARY
 
       - name: Destruction Summary
         run: |
@@ -151,4 +152,5 @@ jobs:
           echo "**Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "**Confirmation**: ${{ github.event.inputs.confirmation }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "⚠️ **Note**: This action is irreversible. State file has been updated to reflect destruction." >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Note**: This action is irreversible. State file has been" >> $GITHUB_STEP_SUMMARY
+          echo "updated to reflect destruction." >> $GITHUB_STEP_SUMMARY
