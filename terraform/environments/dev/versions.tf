@@ -1,6 +1,16 @@
 terraform {
   required_version = ">= 1.6.0"
 
+  # Azure Remote State Backend
+  # Configuration values provided via backend.local.hcl (manual CLI)
+  # or environment variables (GitHub Actions OIDC)
+  backend "azurerm" {
+    # Values set via:
+    # - backend.local.hcl: resource_group_name, storage_account_name, container_name, key
+    # - Environment variables: ARM_RESOURCE_GROUP_NAME, ARM_STORAGE_ACCOUNT_NAME, etc.
+    # - Authentication: Azure CLI (az login) or OIDC (ARM_USE_OIDC=true)
+  }
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"

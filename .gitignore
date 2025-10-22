@@ -13,6 +13,10 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
+# Backend configuration (environment-specific)
+backend.local.hcl
+!backend.local.hcl.example
+
 # Crash log files
 crash.log
 crash.*.log
