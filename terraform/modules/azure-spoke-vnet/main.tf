@@ -128,7 +128,7 @@ resource "azurerm_route_table" "spoke" {
   name                          = "${var.vnet_name}-rt"
   location                      = var.location
   resource_group_name           = var.resource_group_name
-  disable_bgp_route_propagation = true # Disable BGP propagation for UDR
+  bgp_route_propagation_enabled = false # Disable BGP propagation for UDR
 
   # Default route to hub NVA (0.0.0.0/0 → hub NVA IP)
   route {

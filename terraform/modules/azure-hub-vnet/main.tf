@@ -37,7 +37,7 @@ resource "azurerm_subnet" "nva" {
   address_prefixes     = [var.nva_subnet_prefix]
 
   # Disable private endpoint network policies for NVA subnet
-  private_endpoint_network_policies_enabled = false
+  private_endpoint_network_policies = "Disabled"
 }
 
 # T033: Management Subnet
@@ -161,7 +161,7 @@ resource "azurerm_route_table" "hub" {
   name                          = "${var.vnet_name}-rt"
   location                      = var.location
   resource_group_name           = var.resource_group_name
-  disable_bgp_route_propagation = false
+  bgp_route_propagation_enabled = true
 
   # Default route to internet (CE provides internet connectivity)
   route {
