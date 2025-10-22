@@ -102,6 +102,53 @@ terraform destroy
 
 For detailed manual deployment guide, see **[Manual Deployment Guide](docs/manual-deployment.md)**.
 
+## AI Tool Integration
+
+This repository includes MCP (Model Context Protocol) server configuration for enhanced AI tool integration. The `.mcp.json` file defines recommended MCP servers for working with this codebase.
+
+### Available MCP Servers
+
+**Azure MCP Server** (Official Microsoft)
+- Provides context for Azure Storage, Cosmos DB, CLI tools, and resource management
+- Install: `npx -y @azure/mcp-server`
+- Required environment variables:
+  - `AZURE_SUBSCRIPTION_ID`
+  - `AZURE_TENANT_ID`
+  - `AZURE_CLIENT_ID`
+
+**Note**: Terraform and Microsoft Learn MCP servers are not currently available in the official MCP registry.
+
+### Using with Claude Code
+
+To enable MCP servers in Claude Code:
+
+```bash
+# Add server to global configuration
+claude mcp add
+
+# Or manually edit ~/.config/claude-code/mcp.json
+# Copy server configuration from .mcp.json in this repository
+```
+
+### Local Overrides
+
+Create `.mcp.local.json` (gitignored) for environment-specific MCP configurations:
+
+```json
+{
+  "mcpServers": {
+    "azure": {
+      "env": {
+        "AZURE_SUBSCRIPTION_ID": "your-actual-subscription-id",
+        "AZURE_TENANT_ID": "your-actual-tenant-id"
+      }
+    }
+  }
+}
+```
+
+For more details, see [Claude Code MCP Documentation](https://docs.claude.com/en/docs/claude-code/mcp).
+
 ## What Gets Deployed
 
 - **Hub VNET**: Virtual network with CE AppStack nodes as Network Virtual Appliances

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schema/mcp-config.json",
+  "mcpServers": {
+    "azure": {
+      "comment": "Official Microsoft Azure MCP Server",
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@azure/mcp-server"
+      ],
+      "env": {
+        "AZURE_SUBSCRIPTION_ID": "${AZURE_SUBSCRIPTION_ID:-}",
+        "AZURE_TENANT_ID": "${AZURE_TENANT_ID:-}",
+        "AZURE_CLIENT_ID": "${AZURE_CLIENT_ID:-}"
+      },
+      "description": "Provides Azure services context including Storage, Cosmos DB, CLI tools, and resource management"
+    }
+  },
+  "notes": {
+    "terraform_server": "A dedicated Terraform MCP server is not currently available in the official MCP server registry. For Terraform assistance, AI tools can use general code understanding and the Azure MCP server for Azure-specific Terraform resources.",
+    "microsoft_learn_server": "A dedicated Microsoft Learn MCP server is not currently available. Consider using web search capabilities or the Azure MCP server which includes documentation references.",
+    "environment_variables": "Set required Azure environment variables in your shell or .env file. The ${VAR:-} syntax provides graceful fallback when variables are not set.",
+    "local_overrides": "Create .mcp.local.json (gitignored) for environment-specific configurations or additional servers.",
+    "adding_servers": "Use 'claude mcp add' command or manually edit this file. See https://docs.claude.com/en/docs/claude-code/mcp for details.",
+    "usage": "This file serves as documentation and reference. To actually use these MCP servers with Claude Code, add them to your global MCP configuration (~/.config/claude-code/mcp.json) or use 'claude mcp add' command."
+  }
+}
