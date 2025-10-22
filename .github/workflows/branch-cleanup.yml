@@ -1,0 +1,115 @@
+---
+name: Branch Cleanup After Merge
+
+# Purpose: Automatically delete feature branches after PR merge
+# Constitution Reference: Lines 104-109, 416-422
+# Rationale: Enforce mandatory branch cleanup to prevent stale branches
+
+on:
+  pull_request:
+    types:
+      - closed
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  delete-merged-branch:
+    name: Delete Merged Feature Branch
+    runs-on: ubuntu-latest
+
+    # Only run if PR was merged (not just closed)
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: Check branch name pattern
+        id: check_branch
+        run: |
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+          # Don't delete main, master, or default branches
+          if [[ "$BRANCH" == "main" || "$BRANCH" == "master" || "$BRANCH" == "develop" ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::notice::Skipping deletion of protected branch: $BRANCH"
+            exit 0
+          fi
+
+          echo "skip=false" >> $GITHUB_OUTPUT
+          echo "::notice::Branch eligible for deletion: $BRANCH"
+
+      - name: Delete merged branch
+        if: steps.check_branch.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.check_branch.outputs.branch }}"
+          REPO="${{ github.repository }}"
+
+          echo "🗑️  Deleting merged branch: $BRANCH"
+
+          # Delete the branch using GitHub API
+          gh api \
+            --method DELETE \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/repos/$REPO/git/refs/heads/$BRANCH" \
+            && echo "✅ Successfully deleted branch: $BRANCH" \
+            || echo "⚠️  Branch may have already been deleted: $BRANCH"
+
+      - name: Post cleanup reminder
+        if: steps.check_branch.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.check_branch.outputs.branch }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+
+          # Post a comment on the PR reminding about local cleanup
+          gh pr comment $PR_NUMBER --repo $REPO --body "$(cat <<'EOF'
+          ## 🎉 PR Merged - Branch Cleanup
+
+          ✅ Remote branch \`$BRANCH\` has been automatically deleted per constitution requirements.
+
+          ### 📋 Local Cleanup Required
+
+          Please complete these steps on your local machine:
+
+          \`\`\`bash
+          # Switch to main branch
+          git checkout main
+
+          # Update main branch
+          git pull origin main
+
+          # Delete local feature branch
+          git branch -d $BRANCH
+
+          # Verify cleanup
+          git branch -a
+          \`\`\`
+
+          Or run the automated cleanup script:
+          \`\`\`bash
+          ./.specify/scripts/bash/post-merge-cleanup.sh
+          \`\`\`
+
+          **Constitution Reference**: Section I.IV - Issue Closure and Branch Cleanup
+          **Location**: \`.specify/memory/constitution.md\` lines 104-109, 416-422
+          EOF
+          )"
+
+          echo "✅ Posted cleanup reminder comment on PR #$PR_NUMBER"
+
+      - name: Summary
+        if: steps.check_branch.outputs.skip == 'false'
+        run: |
+          BRANCH="${{ steps.check_branch.outputs.branch }}"
+          echo "### 🎯 Branch Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Remote branch deleted**: \`$BRANCH\`" >> $GITHUB_STEP_SUMMARY
+          echo "📝 **Cleanup reminder posted** to PR #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Constitution Compliance**: Mandatory branch cleanup enforced" >> $GITHUB_STEP_SUMMARY
