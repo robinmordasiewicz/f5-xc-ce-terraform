@@ -96,7 +96,14 @@ GITHUB_REPO="f5-xc-ce-terraform"
 RESOURCE_GROUP="${RESOURCE_GROUP:-rg-${AZURE_USERNAME}-${GITHUB_REPO}-tfstate}"
 LOCATION="${LOCATION:-eastus}"
 # Storage account: lowercase alphanumeric only, 3-24 chars, globally unique
-STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-tfstate${AZURE_USERNAME}$(date +%s)}"
+# Format: tfstate + username_prefix(8) + unique_hash(8) = 23 chars total
+if [ -z "$STORAGE_ACCOUNT" ]; then
+  # Truncate username to first 8 chars
+  USERNAME_PREFIX=$(echo "$AZURE_USERNAME" | cut -c1-8)
+  # Create 8-char hash from username+subscription for uniqueness and determinism
+  UNIQUE_HASH=$(echo -n "${AZURE_USERNAME}${SUBSCRIPTION_ID}" | md5sum | cut -c1-8)
+  STORAGE_ACCOUNT="tfstate${USERNAME_PREFIX}${UNIQUE_HASH}"
+fi
 CONTAINER_NAME="${CONTAINER_NAME:-tfstate}"
 CREATE_SP="${1:-}"
 
