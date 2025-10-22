@@ -335,9 +335,15 @@ fi
 
 # Only configure roles and OIDC if we have a service principal
 if [ -n "$APP_ID" ]; then
+  # Track whether both required roles are successfully assigned
+  CONTRIBUTOR_ASSIGNED=false
+  STORAGE_ROLE_ASSIGNED=false
+  ROLES_ASSIGNED=false
+
   # Assign Contributor role at subscription level (idempotent)
   if az role assignment list --assignee "$APP_ID" --scope "/subscriptions/$SUBSCRIPTION_ID" --role "Contributor" --query '[].id' -o tsv 2>/dev/null | grep -q .; then
     print_warning "Service principal already has Contributor role"
+    CONTRIBUTOR_ASSIGNED=true
   else
     if az role assignment create \
       --role "Contributor" \
@@ -345,15 +351,18 @@ if [ -n "$APP_ID" ]; then
       --scope "/subscriptions/$SUBSCRIPTION_ID" \
       --output none 2>/dev/null; then
       print_success "Assigned Contributor role to service principal"
+      CONTRIBUTOR_ASSIGNED=true
     else
       print_warning "Failed to assign Contributor role (insufficient permissions)"
       print_info "Please ask your Azure administrator to assign this role manually"
+      CONTRIBUTOR_ASSIGNED=false
     fi
   fi
 
   # Assign Storage Blob Data Owner for state file access (idempotent)
   if az role assignment list --assignee "$APP_ID" --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Storage/storageAccounts/$STORAGE_ACCOUNT" --role "Storage Blob Data Owner" --query '[].id' -o tsv 2>/dev/null | grep -q .; then
     print_warning "Service principal already has Storage Blob Data Owner role"
+    STORAGE_ROLE_ASSIGNED=true
   else
     if az role assignment create \
       --role "Storage Blob Data Owner" \
@@ -361,10 +370,17 @@ if [ -n "$APP_ID" ]; then
       --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Storage/storageAccounts/$STORAGE_ACCOUNT" \
       --output none 2>/dev/null; then
       print_success "Assigned Storage Blob Data Owner role for state access"
+      STORAGE_ROLE_ASSIGNED=true
     else
       print_warning "Failed to assign Storage Blob Data Owner role (insufficient permissions)"
       print_info "Please ask your Azure administrator to assign this role manually"
+      STORAGE_ROLE_ASSIGNED=false
     fi
+  fi
+
+  # Both roles must succeed for OIDC to work
+  if [ "$CONTRIBUTOR_ASSIGNED" = true ] && [ "$STORAGE_ROLE_ASSIGNED" = true ]; then
+    ROLES_ASSIGNED=true
   fi
 
   # Configure OIDC federated credentials for GitHub Actions
@@ -406,10 +422,93 @@ if [ -n "$APP_ID" ]; then
 else
   echo ""
   print_warning "Skipping role assignments and OIDC configuration (no service principal)"
+  ROLES_ASSIGNED=false
+fi
+
+# Create GitHub secrets only if roles were successfully assigned
+# Otherwise, configure manual CLI workflow
+SECRETS_CREATED=false
+SECRETS_SKIPPED=false
+
+if [ -n "$APP_ID" ] && [ "$ROLES_ASSIGNED" = true ]; then
+  # OIDC workflow is available - create GitHub secrets
+  echo ""
+  print_info "Step 8/8: Creating GitHub secrets..."
+
+  if ! command -v gh &>/dev/null; then
+    print_warning "GitHub CLI (gh) not found. Skipping GitHub secrets creation"
+    print_info "Install gh CLI: https://cli.github.com/"
+    SECRETS_SKIPPED=true
+  else
+    # Check if authenticated to GitHub
+    if ! gh auth status &>/dev/null; then
+      print_warning "Not authenticated to GitHub. Skipping secrets creation"
+      print_info "Run: gh auth login"
+      SECRETS_SKIPPED=true
+    else
+      # Set secrets (idempotent - gh secret set overwrites if exists)
+      # Capture errors for better diagnostics
+      SECRET_COUNT=0
+      FAILED_SECRETS=()
+
+      # Helper function to set secret with error reporting
+      set_secret() {
+        local value="$1"
+        local name="$2"
+        local error_output
+
+        if [ -z "$value" ]; then
+          print_warning "Skipping $name (value is empty)"
+          return 1
+        fi
+
+        if error_output=$(echo "$value" | gh secret set "$name" --repo "$GITHUB_ORG/$GITHUB_REPO" 2>&1); then
+          print_success "Set $name secret"
+          ((SECRET_COUNT++))
+          return 0
+        else
+          print_error "Failed to set $name: $error_output"
+          FAILED_SECRETS+=("$name")
+          return 1
+        fi
+      }
+
+      # Create all secrets
+      set_secret "$SUBSCRIPTION_ID" "AZURE_SUBSCRIPTION_ID"
+      set_secret "$TENANT_ID" "AZURE_TENANT_ID"
+      set_secret "$APP_ID" "AZURE_CLIENT_ID"
+      set_secret "$RESOURCE_GROUP" "ARM_RESOURCE_GROUP_NAME"
+      set_secret "$STORAGE_ACCOUNT" "ARM_STORAGE_ACCOUNT_NAME"
+      set_secret "$CONTAINER_NAME" "ARM_CONTAINER_NAME"
+      set_secret "terraform.tfstate" "ARM_KEY"
+
+      # Evaluate results
+      if [ $SECRET_COUNT -eq 7 ]; then
+        SECRETS_CREATED=true
+        echo ""
+        print_success "Successfully created all $SECRET_COUNT GitHub secrets"
+      elif [ $SECRET_COUNT -gt 0 ]; then
+        echo ""
+        print_warning "Created $SECRET_COUNT secrets, but ${#FAILED_SECRETS[@]} failed: ${FAILED_SECRETS[*]}"
+        print_info "Common issues:"
+        print_info "  • Repository permissions: Ensure you have admin access to $GITHUB_ORG/$GITHUB_REPO"
+        print_info "  • Auth scopes: Run 'gh auth refresh -s admin:org -s repo' to update permissions"
+      else
+        SECRETS_SKIPPED=true
+        echo ""
+        print_error "Failed to create any GitHub secrets"
+        print_info "Check 'gh auth status' and repository permissions"
+      fi
+    fi
+  fi
+else
+  # Roles not assigned or no service principal - configure manual CLI workflow
+  echo ""
+  print_warning "Skipping GitHub secrets creation (OIDC requires role assignments)"
 
   # Generate backend.local.hcl for manual CLI workflow
   echo ""
-  print_info "Service principal setup incomplete - enabling manual CLI workflow"
+  print_info "Configuring manual CLI workflow as fallback..."
 
   # Determine terraform environment directory
   TERRAFORM_ENV_DIR="$(pwd)/terraform/environments/dev"
@@ -421,80 +520,9 @@ else
     print_warning "Could not generate backend.local.hcl automatically"
     print_info "Please manually copy and edit: terraform/environments/dev/backend.local.hcl.example"
   fi
-fi
 
-# Create GitHub secrets
-echo ""
-print_info "Step 8/8: Creating GitHub secrets..."
-
-SECRETS_CREATED=false
-SECRETS_SKIPPED=false
-
-if ! command -v gh &>/dev/null; then
-  print_warning "GitHub CLI (gh) not found. Skipping GitHub secrets creation"
-  print_info "Install gh CLI: https://cli.github.com/"
+  SECRETS_CREATED=false
   SECRETS_SKIPPED=true
-else
-  # Check if authenticated to GitHub
-  if ! gh auth status &>/dev/null; then
-    print_warning "Not authenticated to GitHub. Skipping secrets creation"
-    print_info "Run: gh auth login"
-    SECRETS_SKIPPED=true
-  else
-    # Set secrets (idempotent - gh secret set overwrites if exists)
-    # Capture errors for better diagnostics
-    SECRET_COUNT=0
-    FAILED_SECRETS=()
-
-    # Helper function to set secret with error reporting
-    set_secret() {
-      local value="$1"
-      local name="$2"
-      local error_output
-
-      if [ -z "$value" ]; then
-        print_warning "Skipping $name (value is empty)"
-        return 1
-      fi
-
-      if error_output=$(echo "$value" | gh secret set "$name" --repo "$GITHUB_ORG/$GITHUB_REPO" 2>&1); then
-        print_success "Set $name secret"
-        ((SECRET_COUNT++))
-        return 0
-      else
-        print_error "Failed to set $name: $error_output"
-        FAILED_SECRETS+=("$name")
-        return 1
-      fi
-    }
-
-    # Create all secrets
-    set_secret "$SUBSCRIPTION_ID" "AZURE_SUBSCRIPTION_ID"
-    set_secret "$TENANT_ID" "AZURE_TENANT_ID"
-    set_secret "$APP_ID" "AZURE_CLIENT_ID"
-    set_secret "$RESOURCE_GROUP" "ARM_RESOURCE_GROUP_NAME"
-    set_secret "$STORAGE_ACCOUNT" "ARM_STORAGE_ACCOUNT_NAME"
-    set_secret "$CONTAINER_NAME" "ARM_CONTAINER_NAME"
-    set_secret "terraform.tfstate" "ARM_KEY"
-
-    # Evaluate results
-    if [ $SECRET_COUNT -eq 7 ]; then
-      SECRETS_CREATED=true
-      echo ""
-      print_success "Successfully created all $SECRET_COUNT GitHub secrets"
-    elif [ $SECRET_COUNT -gt 0 ]; then
-      echo ""
-      print_warning "Created $SECRET_COUNT secrets, but ${#FAILED_SECRETS[@]} failed: ${FAILED_SECRETS[*]}"
-      print_info "Common issues:"
-      print_info "  • Repository permissions: Ensure you have admin access to $GITHUB_ORG/$GITHUB_REPO"
-      print_info "  • Auth scopes: Run 'gh auth refresh -s admin:org -s repo' to update permissions"
-    else
-      SECRETS_SKIPPED=true
-      echo ""
-      print_error "Failed to create any GitHub secrets"
-      print_info "Check 'gh auth status' and repository permissions"
-    fi
-  fi
 fi
 
 # Summary
