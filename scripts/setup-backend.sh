@@ -525,6 +525,48 @@ else
   SECRETS_SKIPPED=true
 fi
 
+# Configure GitHub workflow toggle based on role assignment status
+# This variable controls whether Azure-dependent workflows (init, plan, apply) run
+echo ""
+print_info "Configuring GitHub Actions workflow toggle..."
+
+if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
+  if [ -n "$APP_ID" ] && [ "$ROLES_ASSIGNED" = true ]; then
+    # Roles successfully assigned - enable Azure workflows
+    if echo "true" | gh variable set ENABLE_AZURE_WORKFLOWS --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null; then
+      print_success "Enabled Azure workflows (ENABLE_AZURE_WORKFLOWS=true)"
+      print_info "GitHub Actions will run terraform init/plan/apply with OIDC authentication"
+    else
+      print_warning "Could not set ENABLE_AZURE_WORKFLOWS variable automatically"
+      print_info "Set manually: gh variable set ENABLE_AZURE_WORKFLOWS --body 'true' --repo $GITHUB_ORG/$GITHUB_REPO"
+    fi
+  elif [ -n "$APP_ID" ] && [ "$ROLES_ASSIGNED" = false ]; then
+    # Service principal exists but roles not assigned - disable Azure workflows
+    if echo "false" | gh variable set ENABLE_AZURE_WORKFLOWS --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null; then
+      print_warning "Disabled Azure workflows (ENABLE_AZURE_WORKFLOWS=false)"
+      print_info "Reason: Service principal lacks required role assignments"
+      print_info "Only terraform-validate will run in GitHub Actions"
+      echo ""
+      print_info "To enable Azure workflows after assigning roles:"
+      print_info "  gh variable set ENABLE_AZURE_WORKFLOWS --body 'true' --repo $GITHUB_ORG/$GITHUB_REPO"
+    else
+      print_warning "Could not set ENABLE_AZURE_WORKFLOWS variable automatically"
+      print_info "Set manually: gh variable set ENABLE_AZURE_WORKFLOWS --body 'false' --repo $GITHUB_ORG/$GITHUB_REPO"
+    fi
+  else
+    # No service principal created
+    print_info "No service principal - skipping workflow toggle configuration"
+  fi
+else
+  print_warning "GitHub CLI not available or not authenticated - skipping workflow toggle"
+  print_info "You can manually set the variable later:"
+  if [ "$ROLES_ASSIGNED" = true ]; then
+    print_info "  gh variable set ENABLE_AZURE_WORKFLOWS --body 'true' --repo $GITHUB_ORG/$GITHUB_REPO"
+  else
+    print_info "  gh variable set ENABLE_AZURE_WORKFLOWS --body 'false' --repo $GITHUB_ORG/$GITHUB_REPO"
+  fi
+fi
+
 # Summary
 echo ""
 print_success "✨ Azure backend setup complete!"
@@ -548,6 +590,10 @@ if [ "$SECRETS_CREATED" = true ] && [ "$SECRETS_SKIPPED" = false ]; then
   echo "   • ARM_RESOURCE_GROUP_NAME, ARM_STORAGE_ACCOUNT_NAME"
   echo "   • ARM_CONTAINER_NAME, ARM_KEY"
   echo ""
+  echo "✅ GitHub Actions Workflows:"
+  echo "   • ENABLE_AZURE_WORKFLOWS=true (workflows enabled)"
+  echo "   • terraform-init, terraform-plan, terraform-apply will run with OIDC"
+  echo ""
   echo "Next Steps:"
   echo "  1. Get F5 XC API token and add as F5_XC_API_TOKEN secret:"
   echo "     echo \"\$F5_XC_API_TOKEN\" | gh secret set F5_XC_API_TOKEN --repo $GITHUB_ORG/$GITHUB_REPO"
@@ -569,6 +615,15 @@ else
     echo "  AZURE_CLIENT_ID=\"$APP_ID\""
   fi
   echo ""
+  if [ "$ROLES_ASSIGNED" = false ]; then
+    echo "⚠️  GitHub Actions Workflows:"
+    echo "   • ENABLE_AZURE_WORKFLOWS=false (Azure workflows disabled)"
+    echo "   • Reason: Service principal lacks required role assignments"
+    echo "   • Only terraform-validate will run in GitHub Actions"
+    echo "   • To enable after assigning roles:"
+    echo "     gh variable set ENABLE_AZURE_WORKFLOWS --body 'true' --repo $GITHUB_ORG/$GITHUB_REPO"
+    echo ""
+  fi
   echo "Next Steps:"
 
   # Check if backend.local.hcl was generated

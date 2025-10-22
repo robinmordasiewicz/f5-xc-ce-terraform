@@ -16,6 +16,8 @@ permissions:
 jobs:
   terraform-init:
     name: Initialize
+    # Skip if ENABLE_AZURE_WORKFLOWS is explicitly set to 'false'
+    if: vars.ENABLE_AZURE_WORKFLOWS != 'false'
     uses: ./.github/workflows/terraform-init.yml
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -33,6 +35,8 @@ jobs:
 
   terraform-plan:
     name: Plan Infrastructure Changes
+    # Skip if ENABLE_AZURE_WORKFLOWS is explicitly set to 'false'
+    if: vars.ENABLE_AZURE_WORKFLOWS != 'false'
     needs: terraform-validate
     runs-on: ubuntu-latest
 

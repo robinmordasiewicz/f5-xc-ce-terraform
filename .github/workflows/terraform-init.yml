@@ -32,6 +32,9 @@ on:
 jobs:
   terraform-init:
     name: Initialize Terraform
+    # Skip if ENABLE_AZURE_WORKFLOWS is explicitly set to 'false'
+    # Default behavior (variable not set) is to run the workflow
+    if: vars.ENABLE_AZURE_WORKFLOWS != 'false'
     runs-on: ubuntu-latest
 
     permissions:
