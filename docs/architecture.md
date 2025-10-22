@@ -199,33 +199,165 @@ The spoke VNET contains workload resources and connects to the hub via VNET peer
 - **Policy Enforcement**: Azure Policy integration
 - **Audit Logging**: Comprehensive audit trails
 
+## Deployment Methods
+
+This project supports two deployment methods, each optimized for different use cases:
+
+### CI/CD Deployment (GitHub Actions)
+
+**Use Case**: Automated production deployments, team collaboration, consistent infrastructure management
+
+**Authentication**: OIDC Workload Identity Federation
+- No service principal credentials stored in GitHub
+- Uses federated credentials for token exchange
+- Azure AD validates GitHub OIDC tokens
+- Requires service principal with federated credentials configured
+
+**Prerequisites**:
+- Azure service principal with Contributor role
+- Service principal with "Storage Blob Data Owner" role on state storage account
+- GitHub Actions secrets configured:
+  - `AZURE_CLIENT_ID`: Service principal application ID
+  - `AZURE_TENANT_ID`: Azure AD tenant ID
+  - `AZURE_SUBSCRIPTION_ID`: Target subscription ID
+  - `F5_XC_API_TOKEN`: F5 XC Console API token
+
+**Workflow**:
+1. GitHub Actions runner requests OIDC token from GitHub
+2. Azure AD validates token and issues access token
+3. Terraform authenticates to Azure using access token
+4. Terraform operations execute with service principal permissions
+
+**Benefits**:
+- No credentials stored in GitHub (secure)
+- Automated deployment on code changes
+- Built-in approval workflows
+- Consistent deployment across environments
+- Audit trail via GitHub Actions history
+
+### Manual CLI Deployment
+
+**Use Case**: Local development, testing, troubleshooting, learning
+
+**Authentication**: Azure CLI Authentication
+- Uses `az login` for interactive authentication
+- Leverages existing Azure CLI credentials
+- No service principal required (can use user identity)
+- Terraform inherits Azure CLI authentication context
+
+**Prerequisites**:
+- Azure CLI installed and configured
+- User account with required permissions:
+  - "Contributor" role on resource group (for deploying resources)
+  - "Storage Blob Data Owner" role on state storage account (for state management)
+- F5 XC API token
+
+**Workflow**:
+1. User runs `az login` for interactive authentication
+2. User runs `./scripts/setup-backend.sh` to create state storage
+3. User creates `backend.local.hcl` with storage account configuration
+4. User runs `terraform init -backend-config=backend.local.hcl`
+5. Terraform operations use Azure CLI authentication
+
+**Benefits**:
+- Quick setup without service principal configuration
+- Ideal for local development and testing
+- Direct feedback and control
+- Simpler troubleshooting
+- No GitHub Actions configuration needed
+
+### Deployment Methods Comparison
+
+| Aspect | CI/CD (OIDC) | Manual CLI |
+|--------|--------------|------------|
+| **Authentication** | Workload identity federation | Azure CLI (`az login`) |
+| **Setup Complexity** | High (service principal + GitHub) | Low (just Azure CLI) |
+| **Prerequisites** | Service principal + roles + GitHub secrets | User account + roles |
+| **Backend Config** | Environment variables | `backend.local.hcl` file |
+| **State Storage** | Azure Blob Storage | Azure Blob Storage |
+| **State Locking** | ✅ Enabled | ✅ Enabled |
+| **Automation** | ✅ Full automation | ❌ Manual execution |
+| **Use Case** | Production, team workflows | Development, testing |
+| **Approval Workflow** | ✅ Built-in | ❌ Manual only |
+| **Audit Trail** | ✅ GitHub Actions history | ❌ Manual tracking |
+| **Security** | ✅ No credentials in repo | ⚠️ Relies on user account |
+
+### When to Use Each Method
+
+**Use CI/CD Deployment When**:
+- Deploying to production environments
+- Working in a team with multiple contributors
+- Requiring approval workflows for changes
+- Needing consistent, repeatable deployments
+- Implementing infrastructure governance policies
+- Managing multiple environments (dev, staging, prod)
+
+**Use Manual CLI Deployment When**:
+- Developing and testing Terraform configurations locally
+- Learning the infrastructure setup
+- Troubleshooting deployment issues
+- Quick prototyping or experimentation
+- Lacking permissions to create service principals
+- Working in personal development environments
+
 ## State Management
 
 ### Terraform Remote State
 
-- **Backend**: Azure Blob Storage
-- **Encryption**: Microsoft-managed keys
-- **Locking**: Blob lease for state locking
-- **Versioning**: Blob versioning enabled for state history
+- **Backend**: Azure Blob Storage (used by both CI/CD and manual CLI deployments)
+- **Encryption**: Microsoft-managed keys (AES-256)
+- **Locking**: Blob lease mechanism for concurrent operation prevention
+- **Versioning**: Blob versioning enabled for state history and rollback capability
 
-**Configuration**:
+**Backend Configuration** (terraform/backend.tf):
 ```hcl
 terraform {
   backend "azurerm" {
-    resource_group_name  = "tfstate-rg"
-    storage_account_name = "tfstate<unique>"
-    container_name       = "tfstate"
-    key                  = "terraform.tfstate"
+    # Configuration provided via:
+    # - CI/CD: Environment variables (ARM_*)
+    # - Manual: backend.local.hcl file
+    #
+    # Authentication method controlled by ARM_USE_OIDC:
+    # - CI/CD: ARM_USE_OIDC=true (OIDC workload identity)
+    # - Manual: Not set (Azure CLI authentication - default)
   }
 }
 ```
 
+### Authentication Methods for State Access
+
+**CI/CD (OIDC)**:
+```bash
+# Environment variables set by GitHub Actions
+ARM_USE_OIDC=true
+ARM_CLIENT_ID=<service-principal-client-id>
+ARM_TENANT_ID=<azure-tenant-id>
+ARM_SUBSCRIPTION_ID=<azure-subscription-id>
+ARM_RESOURCE_GROUP_NAME=tfstate-rg
+ARM_STORAGE_ACCOUNT_NAME=tfstatexxx
+ARM_CONTAINER_NAME=tfstate
+ARM_KEY=dev/terraform.tfstate
+```
+
+**Manual CLI (Azure CLI)**:
+```hcl
+# backend.local.hcl file
+resource_group_name  = "tfstate-rg"
+storage_account_name = "tfstatexxx"
+container_name       = "tfstate"
+key                  = "dev/terraform.tfstate"
+# use_oidc not set - defaults to Azure CLI auth
+```
+
 ### State Security
 
-- **Access Control**: RBAC on storage account
-- **Network Security**: Private endpoint or service endpoint
-- **Encryption**: AES-256 encryption at rest
-- **Backup**: Soft delete and versioning enabled
+- **Access Control**: Azure RBAC on storage account
+  - CI/CD: Service principal with "Storage Blob Data Owner" role
+  - Manual: User account with "Storage Blob Data Owner" role
+- **Network Security**: HTTPS-only access enforced, optional private endpoint
+- **Encryption**: AES-256 encryption at rest (Microsoft-managed keys)
+- **Backup**: Soft delete enabled (30-day retention) and blob versioning
+- **State Locking**: Prevents concurrent modifications via Azure Blob lease mechanism
 
 ## Automation Pipeline
 
