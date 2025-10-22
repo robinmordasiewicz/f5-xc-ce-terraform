@@ -1,0 +1,50 @@
+# Backend Configuration for Manual CLI Deployment
+#
+# This file provides backend configuration for local Terraform operations
+# using Azure CLI authentication (az login).
+#
+# Setup Instructions:
+# 1. Run: ./scripts/setup-backend.sh
+#    (Creates Azure storage account and container for Terraform state)
+#
+# 2. Copy this file: cp backend.local.hcl.example backend.local.hcl
+#
+# 3. Update the values below with outputs from setup-backend.sh
+#
+# 4. Authenticate with Azure CLI:
+#    az login
+#    az account set --subscription <subscription-id>
+#
+# 5. Initialize Terraform with backend config:
+#    cd terraform/environments/dev
+#    terraform init -backend-config=backend.local.hcl
+#
+# Authentication Method: Azure CLI (az login)
+# - This configuration uses Azure CLI authentication (default)
+# - DO NOT set use_oidc here - it defaults to false for CLI auth
+# - Ensure you have "Storage Blob Data Owner" role on the storage account
+#
+# State Locking: Enabled automatically via Azure Blob lease mechanism
+
+# Azure Resource Group containing the storage account
+resource_group_name = "your-tfstate-rg"
+
+# Storage account name (must be globally unique, 3-24 chars, lowercase, numbers)
+storage_account_name = "your-tfstate-storage"
+
+# Container name within the storage account
+container_name = "tfstate"
+
+# State file path within the container (unique per environment)
+key = "dev/terraform.tfstate"
+
+# Authentication Notes:
+# - Azure CLI authentication is used by default when use_oidc is not set
+# - Ensure 'az login' is run before terraform operations
+# - Required Azure permissions:
+#   - "Contributor" role (or equivalent) on resource group for resources
+#   - "Storage Blob Data Owner" role on storage account for state management
+#
+# For CI/CD with OIDC (GitHub Actions), see:
+# - .github/workflows/terraform-*.yml (sets ARM_USE_OIDC=true)
+# - terraform/backend.tf (backend configuration with OIDC support)

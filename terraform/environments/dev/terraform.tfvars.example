@@ -92,13 +92,32 @@ tags = {
 
 # Terraform State Backend Configuration
 # --------------------------------------
-# Backend is configured via backend.tf with environment variables in GitHub Actions
-# For local development, create a backend-config.hcl file:
+# Backend is configured in terraform/backend.tf with Azure Blob Storage
 #
-# resource_group_name  = "terraform-state-rg"
-# storage_account_name = "tfstatexccedev"
-# container_name       = "tfstate"
-# key                  = "dev/terraform.tfstate"
-# use_oidc             = true
+# For CI/CD (GitHub Actions):
+#   - Uses OIDC workload identity federation (ARM_USE_OIDC=true)
+#   - Configured via environment variables (no backend config file needed)
+#   - See .github/workflows/terraform-*.yml for configuration
 #
-# Then run: terraform init -backend-config=backend-config.hcl
+# For Manual CLI Deployment:
+#   1. Run: ./scripts/setup-backend.sh
+#      (Creates Azure storage account for state management)
+#
+#   2. Create backend configuration:
+#      cp backend.local.hcl.example backend.local.hcl
+#
+#   3. Edit backend.local.hcl with storage account details:
+#      resource_group_name  = "tfstate-rg"
+#      storage_account_name = "tfstatef5xcce"
+#      container_name       = "tfstate"
+#      key                  = "dev/terraform.tfstate"
+#      # Note: DO NOT add use_oidc - defaults to Azure CLI auth
+#
+#   4. Authenticate with Azure CLI:
+#      az login
+#      az account set --subscription <subscription-id>
+#
+#   5. Initialize Terraform:
+#      terraform init -backend-config=backend.local.hcl
+#
+# For detailed manual deployment guide, see: docs/manual-deployment.md

@@ -18,20 +18,23 @@
 terraform {
   backend "azurerm" {
     # Storage account configuration
-    # These values are set via environment variables in GitHub Actions:
-    # - ARM_RESOURCE_GROUP_NAME
-    # - ARM_STORAGE_ACCOUNT_NAME
-    # - ARM_CONTAINER_NAME
-    # - ARM_KEY (state file name)
+    # These values are set via environment variables or backend config file:
+    # - ARM_RESOURCE_GROUP_NAME (or resource_group_name in backend config)
+    # - ARM_STORAGE_ACCOUNT_NAME (or storage_account_name in backend config)
+    # - ARM_CONTAINER_NAME (or container_name in backend config)
+    # - ARM_KEY (or key in backend config)
 
-    # For local development, create backend.local.tfvars:
-    # resource_group_name  = "terraform-state-rg"
-    # storage_account_name = "tfstatexcce"
-    # container_name       = "tfstate"
-    # key                  = "001-ce-cicd-automation.tfstate"
-
-    # Authentication via workload identity federation (GitHub Actions)
-    use_oidc = true
+    # Authentication Methods:
+    # 1. CI/CD (GitHub Actions): OIDC workload identity federation
+    #    - Set ARM_USE_OIDC=true in environment
+    #    - Requires: ARM_CLIENT_ID, ARM_TENANT_ID, ARM_SUBSCRIPTION_ID
+    #
+    # 2. Manual CLI: Azure CLI authentication (default)
+    #    - Use 'az login' before running terraform commands
+    #    - ARM_USE_OIDC not set (defaults to false)
+    #    - For local development, create backend.local.hcl from template:
+    #      cp environments/dev/backend.local.hcl.example environments/dev/backend.local.hcl
+    #    - Then run: terraform init -backend-config=environments/dev/backend.local.hcl
 
     # State locking via Azure Blob lease mechanism
     # Automatically enabled when using azurerm backend
