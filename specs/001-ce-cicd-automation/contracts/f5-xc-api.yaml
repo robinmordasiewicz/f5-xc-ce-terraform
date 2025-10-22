@@ -27,9 +27,7 @@ paths:
       summary: Create Azure VNET Site
       description: |
         Creates a new Azure VNET site in F5 XC Console and generates registration token.
-        This is called by Terraform volt
-
-erra provider to initialize CE site.
+        This is called by Terraform volterra provider to initialize CE site.
       operationId: createAzureVnetSite
       tags:
         - Site Management
