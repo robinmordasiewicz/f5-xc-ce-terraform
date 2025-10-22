@@ -113,7 +113,7 @@ if [ -z "$STORAGE_ACCOUNT" ]; then
 fi
 # Container: lowercase alphanumeric + hyphens, 3-63 chars, add '-tf' suffix
 CONTAINER_BASE=$(echo -n "${AZURE_USERNAME}-${GITHUB_REPO}" | tr '[:upper:]' '[:lower:]')
-CONTAINER_NAME="${CONTAINER_NAME:-$(echo $CONTAINER_BASE | cut -c1-60)-tf}"
+CONTAINER_NAME="${CONTAINER_NAME:-$(echo "$CONTAINER_BASE" | cut -c1-60)-tf}"
 
 print_info "Target Subscription: $SUBSCRIPTION_NAME ($SUBSCRIPTION_ID)"
 print_info "Resource Group: $RESOURCE_GROUP"
@@ -348,36 +348,73 @@ fi
 echo ""
 print_info "Step 8/8: Creating GitHub secrets..."
 
+SECRETS_CREATED=false
+SECRETS_SKIPPED=false
+
 if ! command -v gh &>/dev/null; then
   print_warning "GitHub CLI (gh) not found. Skipping GitHub secrets creation"
   print_info "Install gh CLI: https://cli.github.com/"
+  SECRETS_SKIPPED=true
 else
   # Check if authenticated to GitHub
   if ! gh auth status &>/dev/null; then
     print_warning "Not authenticated to GitHub. Skipping secrets creation"
     print_info "Run: gh auth login"
+    SECRETS_SKIPPED=true
   else
     # Set secrets (idempotent - gh secret set overwrites if exists)
-    echo "$SUBSCRIPTION_ID" | gh secret set AZURE_SUBSCRIPTION_ID --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null &&
-      print_success "Set AZURE_SUBSCRIPTION_ID secret" || print_warning "Failed to set AZURE_SUBSCRIPTION_ID"
+    # Capture errors for better diagnostics
+    SECRET_COUNT=0
+    FAILED_SECRETS=()
 
-    echo "$TENANT_ID" | gh secret set AZURE_TENANT_ID --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null &&
-      print_success "Set AZURE_TENANT_ID secret" || print_warning "Failed to set AZURE_TENANT_ID"
+    # Helper function to set secret with error reporting
+    set_secret() {
+      local value="$1"
+      local name="$2"
+      local error_output
 
-    echo "$APP_ID" | gh secret set AZURE_CLIENT_ID --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null &&
-      print_success "Set AZURE_CLIENT_ID secret" || print_warning "Failed to set AZURE_CLIENT_ID"
+      if [ -z "$value" ]; then
+        print_warning "Skipping $name (value is empty)"
+        return 1
+      fi
 
-    echo "$RESOURCE_GROUP" | gh secret set ARM_RESOURCE_GROUP_NAME --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null &&
-      print_success "Set ARM_RESOURCE_GROUP_NAME secret" || print_warning "Failed to set ARM_RESOURCE_GROUP_NAME"
+      if error_output=$(echo "$value" | gh secret set "$name" --repo "$GITHUB_ORG/$GITHUB_REPO" 2>&1); then
+        print_success "Set $name secret"
+        ((SECRET_COUNT++))
+        return 0
+      else
+        print_error "Failed to set $name: $error_output"
+        FAILED_SECRETS+=("$name")
+        return 1
+      fi
+    }
 
-    echo "$STORAGE_ACCOUNT" | gh secret set ARM_STORAGE_ACCOUNT_NAME --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null &&
-      print_success "Set ARM_STORAGE_ACCOUNT_NAME secret" || print_warning "Failed to set ARM_STORAGE_ACCOUNT_NAME"
+    # Create all secrets
+    set_secret "$SUBSCRIPTION_ID" "AZURE_SUBSCRIPTION_ID"
+    set_secret "$TENANT_ID" "AZURE_TENANT_ID"
+    set_secret "$APP_ID" "AZURE_CLIENT_ID"
+    set_secret "$RESOURCE_GROUP" "ARM_RESOURCE_GROUP_NAME"
+    set_secret "$STORAGE_ACCOUNT" "ARM_STORAGE_ACCOUNT_NAME"
+    set_secret "$CONTAINER_NAME" "ARM_CONTAINER_NAME"
+    set_secret "terraform.tfstate" "ARM_KEY"
 
-    echo "$CONTAINER_NAME" | gh secret set ARM_CONTAINER_NAME --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null &&
-      print_success "Set ARM_CONTAINER_NAME secret" || print_warning "Failed to set ARM_CONTAINER_NAME"
-
-    echo "terraform.tfstate" | gh secret set ARM_KEY --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null &&
-      print_success "Set ARM_KEY secret" || print_warning "Failed to set ARM_KEY"
+    # Evaluate results
+    if [ $SECRET_COUNT -eq 7 ]; then
+      SECRETS_CREATED=true
+      echo ""
+      print_success "Successfully created all $SECRET_COUNT GitHub secrets"
+    elif [ $SECRET_COUNT -gt 0 ]; then
+      echo ""
+      print_warning "Created $SECRET_COUNT secrets, but ${#FAILED_SECRETS[@]} failed: ${FAILED_SECRETS[*]}"
+      print_info "Common issues:"
+      print_info "  • Repository permissions: Ensure you have admin access to $GITHUB_ORG/$GITHUB_REPO"
+      print_info "  • Auth scopes: Run 'gh auth refresh -s admin:org -s repo' to update permissions"
+    else
+      SECRETS_SKIPPED=true
+      echo ""
+      print_error "Failed to create any GitHub secrets"
+      print_info "Check 'gh auth status' and repository permissions"
+    fi
   fi
 fi
 
@@ -386,26 +423,59 @@ echo ""
 print_success "✨ Azure backend setup complete!"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  SAVE THESE VALUES - Required for Terraform and GitHub Secrets"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "Backend Configuration (for terraform init):"
-echo "  ARM_RESOURCE_GROUP_NAME=\"$RESOURCE_GROUP\""
-echo "  ARM_STORAGE_ACCOUNT_NAME=\"$STORAGE_ACCOUNT\""
-echo "  ARM_CONTAINER_NAME=\"$CONTAINER_NAME\""
-echo "  ARM_KEY=\"terraform.tfstate\""
-echo ""
-echo "Azure Credentials (for GitHub Secrets):"
-echo "  AZURE_SUBSCRIPTION_ID=\"$SUBSCRIPTION_ID\""
-echo "  AZURE_TENANT_ID=\"$TENANT_ID\""
-if [ -n "$APP_ID" ]; then
-  echo "  AZURE_CLIENT_ID=\"$APP_ID\""
+
+if [ "$SECRETS_CREATED" = true ] && [ "$SECRETS_SKIPPED" = false ]; then
+  echo "  Setup Summary"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "✅ Azure Resources Created:"
+  echo "   • Resource Group: $RESOURCE_GROUP"
+  echo "   • Storage Account: $STORAGE_ACCOUNT"
+  echo "   • Blob Container: $CONTAINER_NAME"
+  echo ""
+  echo "✅ GitHub Secrets Created Automatically:"
+  echo "   • AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID"
+  if [ -n "$APP_ID" ]; then
+    echo "   • AZURE_CLIENT_ID"
+  fi
+  echo "   • ARM_RESOURCE_GROUP_NAME, ARM_STORAGE_ACCOUNT_NAME"
+  echo "   • ARM_CONTAINER_NAME, ARM_KEY"
+  echo ""
+  echo "Next Steps:"
+  echo "  1. Get F5 XC API token and add as F5_XC_API_TOKEN secret:"
+  echo "     echo \"\$F5_XC_API_TOKEN\" | gh secret set F5_XC_API_TOKEN --repo $GITHUB_ORG/$GITHUB_REPO"
+  echo "  2. Run terraform init to verify backend configuration"
+else
+  echo "  SAVE THESE VALUES - Required for Terraform and GitHub Secrets"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "Backend Configuration (for terraform init):"
+  echo "  ARM_RESOURCE_GROUP_NAME=\"$RESOURCE_GROUP\""
+  echo "  ARM_STORAGE_ACCOUNT_NAME=\"$STORAGE_ACCOUNT\""
+  echo "  ARM_CONTAINER_NAME=\"$CONTAINER_NAME\""
+  echo "  ARM_KEY=\"terraform.tfstate\""
+  echo ""
+  echo "Azure Credentials (for GitHub Secrets):"
+  echo "  AZURE_SUBSCRIPTION_ID=\"$SUBSCRIPTION_ID\""
+  echo "  AZURE_TENANT_ID=\"$TENANT_ID\""
+  if [ -n "$APP_ID" ]; then
+    echo "  AZURE_CLIENT_ID=\"$APP_ID\""
+  fi
+  echo ""
+  echo "Next Steps:"
+  echo "  1. Add these values to GitHub Secrets in your repository:"
+  echo "     gh secret set AZURE_SUBSCRIPTION_ID --body \"\$SUBSCRIPTION_ID\" --repo $GITHUB_ORG/$GITHUB_REPO"
+  echo "     gh secret set AZURE_TENANT_ID --body \"\$TENANT_ID\" --repo $GITHUB_ORG/$GITHUB_REPO"
+  if [ -n "$APP_ID" ]; then
+    echo "     gh secret set AZURE_CLIENT_ID --body \"\$APP_ID\" --repo $GITHUB_ORG/$GITHUB_REPO"
+  fi
+  echo "     gh secret set ARM_RESOURCE_GROUP_NAME --body \"\$RESOURCE_GROUP\" --repo $GITHUB_ORG/$GITHUB_REPO"
+  echo "     gh secret set ARM_STORAGE_ACCOUNT_NAME --body \"\$STORAGE_ACCOUNT\" --repo $GITHUB_ORG/$GITHUB_REPO"
+  echo "     gh secret set ARM_CONTAINER_NAME --body \"\$CONTAINER_NAME\" --repo $GITHUB_ORG/$GITHUB_REPO"
+  echo "     gh secret set ARM_KEY --body \"terraform.tfstate\" --repo $GITHUB_ORG/$GITHUB_REPO"
+  echo "  2. Get F5 XC API token and add as F5_XC_API_TOKEN secret"
+  echo "  3. Run terraform init to verify backend configuration"
 fi
-echo ""
-echo "Next Steps:"
-echo "  1. Add these values to GitHub Secrets in your repository"
-echo "  2. Configure workload identity federation (if using service principal)"
-echo "  3. Get F5 XC API token and add as F5_XC_API_TOKEN secret"
-echo "  4. Run terraform init to verify backend configuration"
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
