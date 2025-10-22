@@ -7,7 +7,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@azure/mcp-server"
+        "@azure/mcp"
       ],
       "env": {
         "AZURE_SUBSCRIPTION_ID": "${AZURE_SUBSCRIPTION_ID:-}",

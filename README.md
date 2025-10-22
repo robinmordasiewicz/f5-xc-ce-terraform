@@ -110,7 +110,8 @@ This repository includes MCP (Model Context Protocol) server configuration for e
 
 **Azure MCP Server** (Official Microsoft)
 - Provides context for Azure Storage, Cosmos DB, CLI tools, and resource management
-- Install: `npx -y @azure/mcp-server`
+- Package: `@azure/mcp` (version 0.9.6+)
+- Install: `npx -y @azure/mcp`
 - Required environment variables:
   - `AZURE_SUBSCRIPTION_ID`
   - `AZURE_TENANT_ID`
