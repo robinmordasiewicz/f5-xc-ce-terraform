@@ -42,6 +42,17 @@ provider "azuread" {
 }
 
 provider "volterra" {
-  # API token from GitHub secrets
-  # api_token = var.f5_xc_api_token (configured in variables.tf)
+  # Authentication via environment variables:
+  # - VOLT_API_KEY: API token/key for authentication
+  # - VOLT_API_URL: Tenant API endpoint
+  #
+  # For CI/CD: Provided via GitHub secrets
+  # For Manual CLI: Sourced from .env file
+  #
+  # Variables passed through TF_VAR_* for Terraform input variables:
+  # - TF_VAR_f5_xc_api_token → var.f5_xc_api_token → VOLT_API_KEY
+  # - TF_VAR_f5_xc_tenant → var.f5_xc_tenant → URL construction
+
+  api_key = var.f5_xc_api_token
+  url     = "https://${var.f5_xc_tenant}.console.ves.volterra.io/api"
 }

@@ -28,6 +28,12 @@ on:
         required: true
       ARM_KEY:
         required: true
+      F5_XC_API_TOKEN:
+        required: true
+      VOLT_API_URL:
+        required: true
+      F5_XC_TENANT:
+        required: true
 
 jobs:
   terraform-init:
@@ -71,6 +77,10 @@ jobs:
           ARM_STORAGE_ACCOUNT_NAME: ${{ secrets.ARM_STORAGE_ACCOUNT_NAME }}
           ARM_CONTAINER_NAME: ${{ secrets.ARM_CONTAINER_NAME }}
           ARM_KEY: ${{ secrets.ARM_KEY }}
+          VOLT_API_KEY: ${{ secrets.F5_XC_API_TOKEN }}
+          VOLT_API_URL: ${{ secrets.VOLT_API_URL }}
+          TF_VAR_f5_xc_api_token: ${{ secrets.F5_XC_API_TOKEN }}
+          TF_VAR_f5_xc_tenant: ${{ secrets.F5_XC_TENANT }}
         run: |
           terraform init \
             -backend-config="resource_group_name=$ARM_RESOURCE_GROUP_NAME" \
