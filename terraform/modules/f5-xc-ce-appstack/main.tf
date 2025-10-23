@@ -49,11 +49,11 @@ resource "azurerm_user_assigned_identity" "ce" {
 
 # T052: Network Interface with IP Forwarding
 resource "azurerm_network_interface" "ce" {
-  name                          = "${var.vm_name}-nic"
-  location                      = var.location
-  resource_group_name           = var.resource_group_name
-  enable_ip_forwarding          = true # Required for NVA functionality
-  enable_accelerated_networking = var.enable_accelerated_networking
+  name                           = "${var.vm_name}-nic"
+  location                       = var.location
+  resource_group_name            = var.resource_group_name
+  ip_forwarding_enabled          = true # Required for NVA functionality
+  accelerated_networking_enabled = var.enable_accelerated_networking
 
   ip_configuration {
     name                          = "internal"

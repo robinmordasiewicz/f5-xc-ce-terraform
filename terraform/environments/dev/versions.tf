@@ -42,17 +42,24 @@ provider "azuread" {
 }
 
 provider "volterra" {
-  # Authentication via environment variables:
-  # - VOLT_API_KEY: API token/key for authentication
-  # - VOLT_API_URL: Tenant API endpoint
+  # Authentication via P12 Certificate (environment variables):
   #
-  # For CI/CD: Provided via GitHub secrets
-  # For Manual CLI: Sourced from .env file
+  # REQUIRED environment variables:
+  #   VES_P12_CONTENT  - Base64-encoded P12 certificate bundle
+  #   VES_P12_PASSWORD - P12 certificate password
+  #   VOLT_API_URL     - Tenant API endpoint
   #
-  # Variables passed through TF_VAR_* for Terraform input variables:
-  # - TF_VAR_f5_xc_api_token → var.f5_xc_api_token → VOLT_API_KEY
-  # - TF_VAR_f5_xc_tenant → var.f5_xc_tenant → URL construction
-
-  api_key = var.f5_xc_api_token
-  url     = "https://${var.f5_xc_tenant}.console.ves.volterra.io/api"
+  # How to obtain P12 certificate:
+  #   1. Login to F5 XC Console: https://<tenant>.console.ves.volterra.io
+  #   2. Navigate to: Administration → Personal Management → Credentials
+  #   3. Click: Add Credentials → API Certificate (NOT API Token!)
+  #   4. Download .p12 file and save the password
+  #   5. Base64 encode: base64 -i certificate.p12 | tr -d '\n'
+  #   6. Set environment variables in .env file
+  #
+  # For CI/CD: Set VES_P12_CONTENT and VES_P12_PASSWORD as GitHub secrets
+  # For Manual CLI: Source from .env file (see .env.example)
+  #
+  # NOTE: API tokens are NOT supported by the Terraform provider.
+  #       You must use certificate-based authentication (P12 or cert/key pair).
 }

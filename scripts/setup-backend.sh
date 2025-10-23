@@ -132,13 +132,22 @@ ENV_FILE_HEADER
   sed -i.bak "s/GENERATION_TIMESTAMP/$(date '+%Y-%m-%d %H:%M:%S')/" "$env_file"
   rm -f "${env_file}.bak"
 
-  # Append credentials
-  cat >>"$env_file" <<ENV_FILE_CONTENT
-# Volterra Provider Environment Variables
+  # Append credentials based on authentication method
+  if [ "$USE_P12_AUTH" = true ]; then
+    cat >>"$env_file" <<ENV_FILE_CONTENT
+# Volterra Provider Environment Variables (P12 Certificate Authentication)
 export VOLT_API_URL="$VOLT_API_URL"
-export VOLT_API_KEY="$F5_XC_API_TOKEN"
+export VES_P12_CONTENT="$VES_P12_CONTENT"
+export VES_P12_PASSWORD="$VES_P12_PASSWORD"
 export TF_VAR_f5_xc_tenant="$F5_XC_TENANT"
-export TF_VAR_f5_xc_api_token="$F5_XC_API_TOKEN"
+
+# Alternative: Certificate and Key File Authentication
+# Uncomment these lines and comment out VES_P12_* variables above to use cert/key files:
+# export VOLT_API_CERT="$HOME/vescred.cert"
+# export VOLT_API_KEY="$HOME/vesprivate.key"
+
+# .vesconfig file created at: $HOME/.vesconfig
+# Contains: server-urls, cert, and key paths for F5 XC CLI tools
 
 # Usage Instructions:
 #   1. Source this file before running Terraform:
@@ -156,9 +165,35 @@ export TF_VAR_f5_xc_api_token="$F5_XC_API_TOKEN"
 #
 # Verification:
 #   • Check credentials are loaded: env | grep VOLT
+#   • Check credentials are loaded: env | grep VES_P12
 #   • Check Terraform variables: env | grep TF_VAR_f5_xc
 #   • Terraform should authenticate without prompts
 ENV_FILE_CONTENT
+  else
+    cat >>"$env_file" <<ENV_FILE_CONTENT
+# Volterra Provider Environment Variables (API Token - NOT SUPPORTED BY TERRAFORM!)
+export VOLT_API_URL="$VOLT_API_URL"
+export VOLT_API_KEY="$F5_XC_API_TOKEN"
+export TF_VAR_f5_xc_tenant="$F5_XC_TENANT"
+export TF_VAR_f5_xc_api_token="$F5_XC_API_TOKEN"
+
+# WARNING: The Terraform provider does NOT support API tokens!
+#          These credentials can only be used for direct API calls.
+#          For Terraform operations, you MUST use P12 certificate authentication.
+#
+# To fix: Re-run setup-backend.sh and choose P12 certificate authentication.
+
+# Usage Instructions (API calls only):
+#   1. Source this file before making API calls:
+#      source .env
+#
+#   2. Example API call:
+#      curl -H "Authorization: APIToken \$VOLT_API_KEY" \\
+#           \$VOLT_API_URL/web/namespaces
+#
+# For Terraform: You cannot proceed without P12 certificate authentication.
+ENV_FILE_CONTENT
+  fi
 
   # Set restrictive permissions
   chmod 600 "$env_file"
@@ -513,24 +548,152 @@ VOLT_API_URL="https://${F5_XC_TENANT}.console.ves.volterra.io/api"
 print_success "Tenant: $F5_XC_TENANT"
 print_info "API URL: $VOLT_API_URL"
 
-# Prompt for API Token
+# Prompt for P12 certificate or API Token
 echo ""
-echo "${YELLOW}API Token Generation Instructions:${NC}"
-echo "  1. Login to F5 XC Console: https://${F5_XC_TENANT}.console.ves.volterra.io"
-echo "  2. Navigate to: Administration > Personal Management > Credentials"
-echo "  3. Click 'Add Credentials' > 'API Token'"
-echo "  4. Copy the token value"
+echo "${YELLOW}F5 XC Authentication Methods:${NC}"
+echo "  1. API Certificate (P12 file) - Recommended for Terraform provider"
+echo "  2. API Token (string) - For direct API calls only"
 echo ""
-read -sp "Paste your F5 XC API Token: " F5_XC_API_TOKEN
+echo "The Terraform provider requires certificate-based authentication."
 echo ""
+read -p "Do you have a P12 certificate file? (yes/no): " HAS_P12_CERT
 
-# Validate token is not empty
-if [ -z "$F5_XC_API_TOKEN" ]; then
-  print_error "API token cannot be empty"
-  exit 1
+if [[ "$HAS_P12_CERT" =~ ^[Yy](es)?$ ]]; then
+  # P12 Certificate path
+  echo ""
+  echo "${YELLOW}P12 Certificate Generation Instructions:${NC}"
+  echo "  1. Login to F5 XC Console: https://${F5_XC_TENANT}.console.ves.volterra.io"
+  echo "  2. Navigate to: Administration > Personal Management > Credentials"
+  echo "  3. Click 'Add Credentials' > 'API Certificate' (NOT API Token!)"
+  echo "  4. Download the .p12 file and save the password"
+  echo ""
+
+  # Prompt for P12 file path
+  read -p "Enter the full path to your P12 certificate file: " P12_FILE_PATH
+
+  # Expand tilde to home directory if present
+  P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
+
+  # Validate P12 file exists
+  if [ ! -f "$P12_FILE_PATH" ]; then
+    print_error "P12 file not found: $P12_FILE_PATH"
+    exit 1
+  fi
+
+  print_success "Found P12 file: $P12_FILE_PATH"
+
+  # Prompt for P12 password (securely)
+  echo ""
+  read -sp "Enter the P12 certificate password: " VES_P12_PASSWORD
+  echo ""
+
+  # Validate password is not empty
+  if [ -z "$VES_P12_PASSWORD" ]; then
+    print_error "P12 password cannot be empty"
+    exit 1
+  fi
+
+  print_success "P12 password received"
+
+  # Extract certificate and private key using openssl
+  echo ""
+  print_info "Extracting certificate and private key from P12 file..."
+
+  # Set output paths
+  CERT_FILE="$HOME/vescred.cert"
+  KEY_FILE="$HOME/vesprivate.key"
+
+  # Extract certificate (without password in command for security)
+  if ! OPENSSL_PASS="$VES_P12_PASSWORD" openssl pkcs12 \
+    -in "$P12_FILE_PATH" \
+    -passin env:OPENSSL_PASS \
+    -nodes \
+    -nokeys \
+    -out "$CERT_FILE" 2>/dev/null; then
+    print_error "Failed to extract certificate from P12 file"
+    print_info "Verify the P12 password is correct"
+    exit 1
+  fi
+
+  # Extract private key (without password in command for security)
+  if ! OPENSSL_PASS="$VES_P12_PASSWORD" openssl pkcs12 \
+    -in "$P12_FILE_PATH" \
+    -passin env:OPENSSL_PASS \
+    -nodes \
+    -nocerts \
+    -out "$KEY_FILE" 2>/dev/null; then
+    print_error "Failed to extract private key from P12 file"
+    rm -f "$CERT_FILE" # Clean up partial extraction
+    exit 1
+  fi
+
+  # Set restrictive permissions
+  chmod 600 "$CERT_FILE" "$KEY_FILE"
+
+  print_success "Certificate extracted: $CERT_FILE"
+  print_success "Private key extracted: $KEY_FILE"
+
+  # Create .vesconfig file
+  echo ""
+  print_info "Creating .vesconfig file..."
+
+  VESCONFIG_FILE="$HOME/.vesconfig"
+  cat >"$VESCONFIG_FILE" <<EOF
+server-urls: $VOLT_API_URL
+key: $KEY_FILE
+cert: $CERT_FILE
+EOF
+
+  chmod 600 "$VESCONFIG_FILE"
+  print_success "Created .vesconfig: $VESCONFIG_FILE"
+
+  # Base64 encode P12 for environment variable (optional, for Terraform provider)
+  echo ""
+  print_info "Encoding P12 certificate for Terraform provider..."
+  VES_P12_CONTENT=$(base64 -i "$P12_FILE_PATH" | tr -d '\n')
+  print_success "P12 certificate encoded (${#VES_P12_CONTENT} bytes)"
+
+  # Set authentication method flag
+  USE_P12_AUTH=true
+  F5_XC_API_TOKEN="" # Clear token if set
+
+else
+  # API Token fallback (not recommended for Terraform provider)
+  echo ""
+  print_warning "API Tokens are NOT supported by the Terraform provider!"
+  print_warning "The Terraform provider requires certificate-based authentication (P12 or cert/key pair)."
+  echo ""
+  read -p "Do you want to continue with API Token for API-only operations? (yes/no): " CONTINUE_WITH_TOKEN
+
+  if [[ ! "$CONTINUE_WITH_TOKEN" =~ ^[Yy](es)?$ ]]; then
+    print_error "Setup cancelled. Please generate a P12 certificate and re-run this script."
+    exit 1
+  fi
+
+  echo ""
+  echo "${YELLOW}API Token Generation Instructions:${NC}"
+  echo "  1. Login to F5 XC Console: https://${F5_XC_TENANT}.console.ves.volterra.io"
+  echo "  2. Navigate to: Administration > Personal Management > Credentials"
+  echo "  3. Click 'Add Credentials' > 'API Token'"
+  echo "  4. Copy the token value"
+  echo ""
+  read -sp "Paste your F5 XC API Token: " F5_XC_API_TOKEN
+  echo ""
+
+  # Validate token is not empty
+  if [ -z "$F5_XC_API_TOKEN" ]; then
+    print_error "API token cannot be empty"
+    exit 1
+  fi
+
+  print_success "API token received (length: ${#F5_XC_API_TOKEN} characters)"
+  print_warning "Remember: This token cannot be used with the Terraform provider!"
+
+  # Set authentication method flag
+  USE_P12_AUTH=false
+  VES_P12_CONTENT=""
+  VES_P12_PASSWORD=""
 fi
-
-print_success "API token received (length: ${#F5_XC_API_TOKEN} characters)"
 
 # Create GitHub secrets only if roles were successfully assigned
 # Otherwise, configure manual CLI workflow
@@ -589,12 +752,17 @@ if [ -n "$APP_ID" ] && [ "$ROLES_ASSIGNED" = true ]; then
       set_secret "$CONTAINER_NAME" "ARM_CONTAINER_NAME"
       set_secret "terraform.tfstate" "ARM_KEY"
 
-      # F5 XC secrets
-      set_secret "$F5_XC_API_TOKEN" "F5_XC_API_TOKEN"
+      # F5 XC secrets (conditional based on authentication method)
+      if [ "$USE_P12_AUTH" = true ]; then
+        set_secret "$VES_P12_CONTENT" "VES_P12_CONTENT"
+        set_secret "$VES_P12_PASSWORD" "VES_P12_PASSWORD"
+      else
+        set_secret "$F5_XC_API_TOKEN" "F5_XC_API_TOKEN"
+      fi
       set_secret "$VOLT_API_URL" "VOLT_API_URL"
       set_secret "$F5_XC_TENANT" "F5_XC_TENANT"
 
-      # Evaluate results
+      # Evaluate results (10 total: 7 Azure + 3 F5 XC)
       if [ $SECRET_COUNT -eq 10 ]; then
         SECRETS_CREATED=true
         echo ""
@@ -711,7 +879,12 @@ if [ "$SECRETS_CREATED" = true ] && [ "$SECRETS_SKIPPED" = false ]; then
   echo "   • ARM_CONTAINER_NAME, ARM_KEY"
   echo ""
   echo "   F5 Distributed Cloud:"
-  echo "   • F5_XC_API_TOKEN - Provider authentication"
+  if [ "$USE_P12_AUTH" = true ]; then
+    echo "   • VES_P12_CONTENT - Base64-encoded P12 certificate"
+    echo "   • VES_P12_PASSWORD - P12 certificate password"
+  else
+    echo "   • F5_XC_API_TOKEN - API Token (NOT for Terraform!)"
+  fi
   echo "   • VOLT_API_URL - Tenant API endpoint ($VOLT_API_URL)"
   echo "   • F5_XC_TENANT - Tenant name ($F5_XC_TENANT)"
   echo ""
@@ -788,7 +961,12 @@ else
   echo "     gh secret set ARM_KEY --body \"terraform.tfstate\" --repo $GITHUB_ORG/$GITHUB_REPO"
   echo ""
   echo "     # F5 XC secrets"
-  echo "     echo \"\$F5_XC_API_TOKEN\" | gh secret set F5_XC_API_TOKEN --repo $GITHUB_ORG/$GITHUB_REPO"
+  if [ "$USE_P12_AUTH" = true ]; then
+    echo "     echo \"\$VES_P12_CONTENT\" | gh secret set VES_P12_CONTENT --repo $GITHUB_ORG/$GITHUB_REPO"
+    echo "     echo \"\$VES_P12_PASSWORD\" | gh secret set VES_P12_PASSWORD --repo $GITHUB_ORG/$GITHUB_REPO"
+  else
+    echo "     echo \"\$F5_XC_API_TOKEN\" | gh secret set F5_XC_API_TOKEN --repo $GITHUB_ORG/$GITHUB_REPO"
+  fi
   echo "     echo \"$VOLT_API_URL\" | gh secret set VOLT_API_URL --repo $GITHUB_ORG/$GITHUB_REPO"
   echo "     echo \"$F5_XC_TENANT\" | gh secret set F5_XC_TENANT --repo $GITHUB_ORG/$GITHUB_REPO"
 fi

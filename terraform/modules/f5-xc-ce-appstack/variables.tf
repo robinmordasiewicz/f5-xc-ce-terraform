@@ -57,7 +57,7 @@ variable "enable_accelerated_networking" {
 variable "admin_username" {
   description = "Admin username for CE VM"
   type        = string
-  default     = "admin"
+  default     = "ceadmin"
 }
 
 variable "tags" {
