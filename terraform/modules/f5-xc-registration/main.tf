@@ -20,60 +20,121 @@ terraform {
   }
 }
 
-# T047: Create Azure VNET Site in F5 XC Console
-resource "volterra_azure_vnet_site" "ce_site" {
+# T047: Create Azure Secure Mesh Site (v2) in F5 XC Console
+# Using volterra_securemesh_site_v2 for improved functionality and future-proof deployment
+resource "volterra_securemesh_site_v2" "ce_site" {
   name      = var.site_name
   namespace = var.namespace
-
-  # Azure region
-  azure_region = var.azure_region
-
-  # Resource group
-  resource_group = var.resource_group_name
-
-  # Machine type (Standard_D8s_v3: 8 vCPUs, 32 GB RAM)
-  machine_type = "Standard_D8s_v3"
-
-  # Ingress/Egress Gateway configuration (Secure Mesh Site)
-  ingress_egress_gw {
-    azure_certified_hw = "azure-byol-multi-nic-voltmesh"
-
-    # Inside network (hub VNET subnet for CE instances)
-    inside_network {
-      existing_network {
-        resource_group = var.resource_group_name
-        vnet_name      = var.vnet_name
-        subnet {
-          subnet_name = var.subnet_name
-        }
-      }
-    }
-
-    # Performance mode (High performance for production)
-    performance_enhancement_mode {
-      perf_mode_l7_enhanced = true
-    }
-
-    # No outside network (internal LB only)
-    no_outside_network = true
-
-    # No forward proxy
-    no_forward_proxy = true
-
-    # Global network configuration
-    no_global_network       = false
-    no_inside_static_routes = false
-  }
-
-  # Operating system version
-  os {
-    default_os_version = true
-  }
 
   # Site labels
   labels = {
     environment = "production"
     deployment  = "terraform"
+  }
+
+  # Azure provider configuration
+  azure {
+    not_managed {
+      node_list {
+        hostname = var.site_name
+
+        # Configure interface for Site Local Inside (SLI) network
+        interface_list {
+          # Use existing Azure VNET subnet
+          name        = "eth0"
+          description = "Inside network interface for hub VNET connectivity"
+
+          # Ethernet interface configuration
+          ethernet_interface {
+            device = "eth0"
+          }
+
+          # DHCP client for IP assignment
+          dhcp_client = true
+
+          # No IPv6 address
+          no_ipv6_address = true
+
+          # Network option: Site Local Inside (Local VRF)
+          network_option {
+            site_local_inside_network = true
+          }
+
+          # Enable site-to-site connectivity on this interface
+          site_to_site_connectivity_interface_enabled = true
+
+          # Interface priority
+          priority = 1
+
+          # Enable monitoring
+          monitor_disabled = false
+        }
+
+        # Node type
+        type = "Control"
+      }
+    }
+  }
+
+  # Performance enhancement mode (L7 optimized)
+  performance_enhancement_mode {
+    perf_mode_l7_enhanced = true
+  }
+
+  # Site Local Inside (SLI) local VRF configuration
+  local_vrf {
+    # Default SLI configuration
+    default_sli_config = true
+
+    # Default SLO (Site Local Outside) configuration
+    default_config = true
+  }
+
+  # Disable forward proxy
+  no_forward_proxy = true
+
+  # Disable network policy (firewall)
+  no_network_policy = true
+
+  # Block all node local services (WebUI, SSH, DNS)
+  block_all_services = true
+
+  # Disable logs streaming
+  logs_streaming_disabled = true
+
+  # Enable High Availability
+  enable_ha = true
+
+  # Software settings - use defaults
+  software_settings {
+    os {
+      default_os_version = true
+    }
+    sw {
+      default_sw_version = true
+    }
+  }
+
+  # Regional Edge (RE) selection - use geo proximity
+  re_select {
+    geo_proximity = true
+  }
+
+  # Disable site-to-site connectivity on SLI
+  no_s2s_connectivity_sli = true
+
+  # Disable site-to-site connectivity on SLO
+  no_s2s_connectivity_slo = true
+
+  # Offline survivability mode disabled
+  offline_survivability_mode {
+    no_offline_survivability_mode = true
+  }
+
+  # DNS and NTP configuration - use F5 defaults
+  dns_ntp_config {
+    f5_dns_default = true
+    f5_ntp_default = true
   }
 
   # Lifecycle configuration
@@ -85,21 +146,14 @@ resource "volterra_azure_vnet_site" "ce_site" {
   }
 }
 
-# T048: Generate Site Token
-# Wait for site to be created, then get registration token
-resource "volterra_site_state" "ce_site_state" {
-  name           = volterra_azure_vnet_site.ce_site.name
-  namespace      = var.namespace
-  state          = "ONLINE" # Wait for site to be ONLINE
-  wait_time      = 300      # Wait up to 5 minutes
-  retry_interval = 10       # Check every 10 seconds
-}
-
-# T049: Extract Registration Token
-# The token is available after site creation
-data "volterra_registration_token" "ce_token" {
-  name      = volterra_azure_vnet_site.ce_site.name
+# T048: Create Site Registration Token
+# Create a token for CE node registration with this site
+resource "volterra_token" "ce_site_token" {
+  name      = "${var.site_name}-token"
   namespace = var.namespace
 
-  depends_on = [volterra_azure_vnet_site.ce_site]
+  # Lifecycle: tokens are sensitive and should be rotated periodically
+  lifecycle {
+    create_before_destroy = true
+  }
 }
