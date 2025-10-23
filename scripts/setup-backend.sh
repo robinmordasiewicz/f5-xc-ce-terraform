@@ -110,6 +110,68 @@ EOF
   fi
 }
 
+# Function to generate .env file for F5 XC credentials
+generate_volterra_env_file() {
+  local env_file=".env"
+
+  print_info "Generating .env file with F5 XC credentials for manual CLI workflow..."
+
+  # Create .env file in project root
+  cat >"$env_file" <<'ENV_FILE_HEADER'
+# F5 Distributed Cloud Provider Authentication
+# Generated: GENERATION_TIMESTAMP
+#
+# These credentials enable Terraform to authenticate with F5 XC Console
+# for managing Customer Edge sites and related resources.
+#
+# IMPORTANT: This file is gitignored. Never commit credentials to version control.
+
+ENV_FILE_HEADER
+
+  # Add timestamp (sed is more portable than trying to embed date in heredoc)
+  sed -i.bak "s/GENERATION_TIMESTAMP/$(date '+%Y-%m-%d %H:%M:%S')/" "$env_file"
+  rm -f "${env_file}.bak"
+
+  # Append credentials
+  cat >>"$env_file" <<ENV_FILE_CONTENT
+# Volterra Provider Environment Variables
+export VOLT_API_URL="$VOLT_API_URL"
+export VOLT_API_KEY="$F5_XC_API_TOKEN"
+export TF_VAR_f5_xc_tenant="$F5_XC_TENANT"
+export TF_VAR_f5_xc_api_token="$F5_XC_API_TOKEN"
+
+# Usage Instructions:
+#   1. Source this file before running Terraform:
+#      source .env
+#
+#   2. Authenticate with Azure:
+#      az login
+#      az account set --subscription $SUBSCRIPTION_ID
+#
+#   3. Run Terraform commands:
+#      cd terraform/environments/dev
+#      terraform init -backend-config=backend.local.hcl
+#      terraform plan
+#      terraform apply
+#
+# Verification:
+#   • Check credentials are loaded: env | grep VOLT
+#   • Check Terraform variables: env | grep TF_VAR_f5_xc
+#   • Terraform should authenticate without prompts
+ENV_FILE_CONTENT
+
+  # Set restrictive permissions
+  chmod 600 "$env_file"
+
+  if [ -f "$env_file" ]; then
+    print_success "Created: $env_file (permissions: 600)"
+    return 0
+  else
+    print_error "Failed to create .env file"
+    return 1
+  fi
+}
+
 # Check prerequisites
 print_info "Checking prerequisites..."
 
@@ -425,6 +487,51 @@ else
   ROLES_ASSIGNED=false
 fi
 
+# Prompt for F5 Distributed Cloud (Volterra) credentials
+echo ""
+print_info "Step 7.5/8: F5 Distributed Cloud (Volterra) Configuration..."
+
+# Prompt for tenant name
+echo ""
+echo "${BLUE}F5 Distributed Cloud Provider Configuration${NC}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+read -p "Enter your F5 XC tenant name (e.g., 'my-company' from my-company.console.ves.volterra.io): " F5_XC_TENANT
+
+# Validate tenant name format (lowercase alphanumeric + hyphens, must start/end with alphanumeric)
+if [[ -z "$F5_XC_TENANT" ]]; then
+  print_error "Tenant name cannot be empty"
+  exit 1
+elif [[ ! "$F5_XC_TENANT" =~ ^[a-z0-9][a-z0-9-]*[a-z0-9]$ ]] && [[ ! "$F5_XC_TENANT" =~ ^[a-z0-9]$ ]]; then
+  print_error "Invalid tenant name format. Use lowercase alphanumeric characters and hyphens only."
+  print_info "Tenant name must start and end with alphanumeric character"
+  exit 1
+fi
+
+# Construct API URL
+VOLT_API_URL="https://${F5_XC_TENANT}.console.ves.volterra.io/api"
+print_success "Tenant: $F5_XC_TENANT"
+print_info "API URL: $VOLT_API_URL"
+
+# Prompt for API Token
+echo ""
+echo "${YELLOW}API Token Generation Instructions:${NC}"
+echo "  1. Login to F5 XC Console: https://${F5_XC_TENANT}.console.ves.volterra.io"
+echo "  2. Navigate to: Administration > Personal Management > Credentials"
+echo "  3. Click 'Add Credentials' > 'API Token'"
+echo "  4. Copy the token value"
+echo ""
+read -sp "Paste your F5 XC API Token: " F5_XC_API_TOKEN
+echo ""
+
+# Validate token is not empty
+if [ -z "$F5_XC_API_TOKEN" ]; then
+  print_error "API token cannot be empty"
+  exit 1
+fi
+
+print_success "API token received (length: ${#F5_XC_API_TOKEN} characters)"
+
 # Create GitHub secrets only if roles were successfully assigned
 # Otherwise, configure manual CLI workflow
 SECRETS_CREATED=false
@@ -482,8 +589,13 @@ if [ -n "$APP_ID" ] && [ "$ROLES_ASSIGNED" = true ]; then
       set_secret "$CONTAINER_NAME" "ARM_CONTAINER_NAME"
       set_secret "terraform.tfstate" "ARM_KEY"
 
+      # F5 XC secrets
+      set_secret "$F5_XC_API_TOKEN" "F5_XC_API_TOKEN"
+      set_secret "$VOLT_API_URL" "VOLT_API_URL"
+      set_secret "$F5_XC_TENANT" "F5_XC_TENANT"
+
       # Evaluate results
-      if [ $SECRET_COUNT -eq 7 ]; then
+      if [ $SECRET_COUNT -eq 10 ]; then
         SECRETS_CREATED=true
         echo ""
         print_success "Successfully created all $SECRET_COUNT GitHub secrets"
@@ -514,11 +626,18 @@ else
   TERRAFORM_ENV_DIR="$(pwd)/terraform/environments/dev"
 
   if generate_backend_local_config "$TERRAFORM_ENV_DIR"; then
-    print_success "Manual CLI workflow configured successfully"
-    print_info "You can now use Azure CLI authentication for Terraform operations"
+    print_success "Azure backend configuration created"
   else
     print_warning "Could not generate backend.local.hcl automatically"
     print_info "Please manually copy and edit: terraform/environments/dev/backend.local.hcl.example"
+  fi
+
+  # Generate .env file for F5 XC credentials
+  echo ""
+  if generate_volterra_env_file; then
+    print_success "F5 XC credentials configured for manual CLI"
+  else
+    print_warning "Could not generate .env file automatically"
   fi
 
   SECRETS_CREATED=false
@@ -583,6 +702,7 @@ if [ "$SECRETS_CREATED" = true ] && [ "$SECRETS_SKIPPED" = false ]; then
   echo "   • Blob Container: $CONTAINER_NAME"
   echo ""
   echo "✅ GitHub Secrets Created Automatically:"
+  echo "   Azure Authentication:"
   echo "   • AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID"
   if [ -n "$APP_ID" ]; then
     echo "   • AZURE_CLIENT_ID"
@@ -590,14 +710,20 @@ if [ "$SECRETS_CREATED" = true ] && [ "$SECRETS_SKIPPED" = false ]; then
   echo "   • ARM_RESOURCE_GROUP_NAME, ARM_STORAGE_ACCOUNT_NAME"
   echo "   • ARM_CONTAINER_NAME, ARM_KEY"
   echo ""
-  echo "✅ GitHub Actions Workflows:"
-  echo "   • ENABLE_AZURE_WORKFLOWS=true (workflows enabled)"
-  echo "   • terraform-init, terraform-plan, terraform-apply will run with OIDC"
+  echo "   F5 Distributed Cloud:"
+  echo "   • F5_XC_API_TOKEN - Provider authentication"
+  echo "   • VOLT_API_URL - Tenant API endpoint ($VOLT_API_URL)"
+  echo "   • F5_XC_TENANT - Tenant name ($F5_XC_TENANT)"
+  echo ""
+  echo "✅ GitHub Actions: ENABLED"
+  echo "   • terraform-validate: ✓ Runs on all PRs"
+  echo "   • terraform-plan: ✓ PR validation with OIDC"
+  echo "   • terraform-apply: ✓ Auto-deploy on main branch"
   echo ""
   echo "Next Steps:"
-  echo "  1. Get F5 XC API token and add as F5_XC_API_TOKEN secret:"
-  echo "     echo \"\$F5_XC_API_TOKEN\" | gh secret set F5_XC_API_TOKEN --repo $GITHUB_ORG/$GITHUB_REPO"
-  echo "  2. Run terraform init to verify backend configuration"
+  echo "  1. Push changes to trigger GitHub Actions"
+  echo "  2. Open PR to test terraform-plan workflow"
+  echo "  3. Merge PR to trigger terraform-apply"
 else
   echo "  SAVE THESE VALUES - Required for Terraform and GitHub Secrets"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -627,20 +753,22 @@ else
   echo "Next Steps:"
 
   # Check if backend.local.hcl was generated
-  if [ -f "terraform/environments/dev/backend.local.hcl" ]; then
-    echo "  1. ✅ backend.local.hcl has been generated for manual CLI workflow"
-    echo "     Location: terraform/environments/dev/backend.local.hcl"
+  if [ -f "terraform/environments/dev/backend.local.hcl" ] && [ -f ".env" ]; then
+    echo "  1. ✅ Configuration files generated for manual CLI workflow:"
+    echo "     • terraform/environments/dev/backend.local.hcl - Backend config"
+    echo "     • .env - F5 XC credentials"
     echo ""
-    echo "  2. For local development with Azure CLI:"
-    echo "     cd terraform/environments/dev"
+    echo "  2. For local development:"
+    echo "     source .env"
     echo "     az login"
     echo "     az account set --subscription $SUBSCRIPTION_ID"
+    echo "     cd terraform/environments/dev"
     echo "     terraform init -backend-config=backend.local.hcl"
     echo "     terraform plan"
     echo ""
     echo "  3. To enable GitHub Actions CI/CD, add these secrets manually:"
   else
-    echo "  1. For local development, create backend.local.hcl:"
+    echo "  1. For local development, create configuration files:"
     echo "     cd terraform/environments/dev"
     echo "     cp backend.local.hcl.example backend.local.hcl"
     echo "     # Edit with values shown above"
@@ -648,6 +776,7 @@ else
     echo "  2. To enable GitHub Actions CI/CD, add these secrets:"
   fi
 
+  echo "     # Azure secrets"
   echo "     gh secret set AZURE_SUBSCRIPTION_ID --body \"\$SUBSCRIPTION_ID\" --repo $GITHUB_ORG/$GITHUB_REPO"
   echo "     gh secret set AZURE_TENANT_ID --body \"\$TENANT_ID\" --repo $GITHUB_ORG/$GITHUB_REPO"
   if [ -n "$APP_ID" ]; then
@@ -658,7 +787,10 @@ else
   echo "     gh secret set ARM_CONTAINER_NAME --body \"\$CONTAINER_NAME\" --repo $GITHUB_ORG/$GITHUB_REPO"
   echo "     gh secret set ARM_KEY --body \"terraform.tfstate\" --repo $GITHUB_ORG/$GITHUB_REPO"
   echo ""
-  echo "  Get F5 XC API token and add as F5_XC_API_TOKEN secret"
+  echo "     # F5 XC secrets"
+  echo "     echo \"\$F5_XC_API_TOKEN\" | gh secret set F5_XC_API_TOKEN --repo $GITHUB_ORG/$GITHUB_REPO"
+  echo "     echo \"$VOLT_API_URL\" | gh secret set VOLT_API_URL --repo $GITHUB_ORG/$GITHUB_REPO"
+  echo "     echo \"$F5_XC_TENANT\" | gh secret set F5_XC_TENANT --repo $GITHUB_ORG/$GITHUB_REPO"
 fi
 
 echo ""

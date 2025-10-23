@@ -48,6 +48,9 @@ jobs:
       ARM_STORAGE_ACCOUNT_NAME: ${{ secrets.ARM_STORAGE_ACCOUNT_NAME }}
       ARM_CONTAINER_NAME: ${{ secrets.ARM_CONTAINER_NAME }}
       ARM_KEY: ${{ secrets.ARM_KEY }}
+      F5_XC_API_TOKEN: ${{ secrets.F5_XC_API_TOKEN }}
+      VOLT_API_URL: ${{ secrets.VOLT_API_URL }}
+      F5_XC_TENANT: ${{ secrets.F5_XC_TENANT }}
 
   terraform-destroy:
     name: Destroy Infrastructure
@@ -90,7 +93,10 @@ jobs:
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          VOLT_API_KEY: ${{ secrets.F5_XC_API_TOKEN }}
+          VOLT_API_URL: ${{ secrets.VOLT_API_URL }}
           TF_VAR_f5_xc_api_token: ${{ secrets.F5_XC_API_TOKEN }}
+          TF_VAR_f5_xc_tenant: ${{ secrets.F5_XC_TENANT }}
         run: |
           echo "## 🗑️ Terraform Destroy Plan" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -114,7 +120,10 @@ jobs:
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          VOLT_API_KEY: ${{ secrets.F5_XC_API_TOKEN }}
+          VOLT_API_URL: ${{ secrets.VOLT_API_URL }}
           TF_VAR_f5_xc_api_token: ${{ secrets.F5_XC_API_TOKEN }}
+          TF_VAR_f5_xc_tenant: ${{ secrets.F5_XC_TENANT }}
         run: |
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## 💥 Destruction In Progress" >> $GITHUB_STEP_SUMMARY
