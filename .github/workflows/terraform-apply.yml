@@ -83,6 +83,7 @@ jobs:
           VOLT_API_URL: ${{ secrets.VOLT_API_URL }}
           TF_VAR_f5_xc_api_token: ${{ secrets.F5_XC_API_TOKEN }}
           TF_VAR_f5_xc_tenant: ${{ secrets.F5_XC_TENANT }}
+          TF_VAR_resource_group_name: ${{ secrets.ARM_RESOURCE_GROUP_NAME }}
         run: |
           terraform plan -out=tfplan -detailed-exitcode || echo "exitcode=$?" >> $GITHUB_OUTPUT
           # Exit code 2 means changes detected, which is expected
@@ -157,6 +158,7 @@ jobs:
           VOLT_API_URL: ${{ secrets.VOLT_API_URL }}
           TF_VAR_f5_xc_api_token: ${{ secrets.F5_XC_API_TOKEN }}
           TF_VAR_f5_xc_tenant: ${{ secrets.F5_XC_TENANT }}
+          TF_VAR_resource_group_name: ${{ secrets.ARM_RESOURCE_GROUP_NAME }}
         run: |
           echo "## 🚀 Terraform Apply Started" >> $GITHUB_STEP_SUMMARY
           echo "**Time**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY

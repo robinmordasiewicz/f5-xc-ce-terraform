@@ -80,6 +80,7 @@ jobs:
           VOLT_API_URL: ${{ secrets.VOLT_API_URL }}
           TF_VAR_f5_xc_api_token: ${{ secrets.F5_XC_API_TOKEN }}
           TF_VAR_f5_xc_tenant: ${{ secrets.F5_XC_TENANT }}
+          TF_VAR_resource_group_name: ${{ secrets.ARM_RESOURCE_GROUP_NAME }}
         run: |
           terraform plan -no-color -out=tfplan 2>&1 | tee plan.txt
           echo "exitcode=$?" >> $GITHUB_OUTPUT
