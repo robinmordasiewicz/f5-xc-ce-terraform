@@ -548,212 +548,181 @@ VOLT_API_URL="https://${F5_XC_TENANT}.console.ves.volterra.io/api"
 print_success "Tenant: $F5_XC_TENANT"
 print_info "API URL: $VOLT_API_URL"
 
-# Prompt for P12 certificate or API Token
+# P12 Certificate Configuration
 echo ""
-echo -e "${YELLOW}F5 XC Authentication Methods:${NC}"
-echo "  1. API Certificate (P12 file) - Recommended for Terraform provider"
-echo "  2. API Token (string) - For direct API calls only"
+echo -e "${YELLOW}F5 XC P12 Certificate Authentication${NC}"
+echo "The Terraform provider requires P12 certificate-based authentication."
 echo ""
-echo "The Terraform provider requires certificate-based authentication."
-echo ""
-read -p "Do you have a P12 certificate file? (yes/no): " HAS_P12_CERT
 
-if [[ "$HAS_P12_CERT" =~ ^[Yy](es)?$ ]]; then
-  # P12 Certificate path
+# P12 Certificate generation instructions
+echo -e "${YELLOW}P12 Certificate Generation Instructions:${NC}"
+echo "  1. Login to F5 XC Console: https://${F5_XC_TENANT}.console.ves.volterra.io"
+echo "  2. Navigate to: Administration > Personal Management > Credentials"
+echo "  3. Click 'Add Credentials' > 'API Certificate' (NOT API Token!)"
+echo "  4. Download the .p12 file and save the password"
+echo ""
+
+# Check for P12 file in default location first
+DEFAULT_P12_PATH="$HOME/Downloads/${F5_XC_TENANT}.console.ves.volterra.io.api-creds.p12"
+
+if [ -f "$DEFAULT_P12_PATH" ]; then
+  # Default file exists - show full path and offer to use it
+  print_info "Found P12 file: $DEFAULT_P12_PATH"
   echo ""
-  echo -e "${YELLOW}P12 Certificate Generation Instructions:${NC}"
-  echo "  1. Login to F5 XC Console: https://${F5_XC_TENANT}.console.ves.volterra.io"
-  echo "  2. Navigate to: Administration > Personal Management > Credentials"
-  echo "  3. Click 'Add Credentials' > 'API Certificate' (NOT API Token!)"
-  echo "  4. Download the .p12 file and save the password"
-  echo ""
+  read -p "Press Enter to use this file, or enter alternate path: " P12_FILE_PATH
 
-  # Check for P12 file in default location first
-  DEFAULT_P12_PATH="$HOME/Downloads/${F5_XC_TENANT}.console.ves.volterra.io.api-creds.p12"
-
-  if [ -f "$DEFAULT_P12_PATH" ]; then
-    print_info "Found P12 file in default location: $DEFAULT_P12_PATH"
-    echo ""
-    read -p "Press Enter to use default, or enter alternate path: " P12_FILE_PATH
-
-    # If user pressed Enter (empty input), use default
-    if [ -z "$P12_FILE_PATH" ]; then
-      P12_FILE_PATH="$DEFAULT_P12_PATH"
-      print_success "Using default P12 file: $P12_FILE_PATH"
-    else
-      # Expand tilde to home directory if present
-      P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
-      print_success "Using specified P12 file: $P12_FILE_PATH"
-    fi
+  # If user pressed Enter (empty input), use default
+  if [ -z "$P12_FILE_PATH" ]; then
+    P12_FILE_PATH="$DEFAULT_P12_PATH"
+    print_success "Using P12 file: $P12_FILE_PATH"
   else
-    # No default file found - prompt for path
-    echo ""
-    read -p "Enter the full path to your P12 certificate file: " P12_FILE_PATH
     # Expand tilde to home directory if present
     P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
   fi
-
-  # Validate P12 file exists
-  if [ ! -f "$P12_FILE_PATH" ]; then
-    print_error "P12 file not found: $P12_FILE_PATH"
-    exit 1
-  fi
-
-  print_success "Found P12 file: $P12_FILE_PATH"
-
-  # Prompt for P12 password (securely) - support environment variable
+else
+  # No default file found - prompt for path
+  print_warning "Default P12 file not found at: $DEFAULT_P12_PATH"
   echo ""
+  read -p "Enter the full path to your P12 certificate file: " P12_FILE_PATH
+  # Expand tilde to home directory if present
+  P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
+fi
 
-  # Check if password already set in environment
-  if [ -n "$VES_P12_PASSWORD" ]; then
-    print_info "P12 password found in environment variable"
-    echo ""
-    read -p "Use existing password? (yes/no/show): " PASSWORD_CHOICE
+# Validate P12 file exists
+if [ ! -f "$P12_FILE_PATH" ]; then
+  print_error "P12 file not found: $P12_FILE_PATH"
+  print_info "Please verify the file path and ensure the P12 certificate exists"
+  exit 1
+fi
 
-    case "${PASSWORD_CHOICE,,}" in
-      yes | y | "")
-        print_success "Using existing password from environment"
-        ;;
-      show)
-        echo "Current password: $VES_P12_PASSWORD"
-        read -p "Press Enter to use this password, or type new password: " NEW_PASSWORD
-        if [ -n "$NEW_PASSWORD" ]; then
-          VES_P12_PASSWORD="$NEW_PASSWORD"
-          print_success "Using new password"
-        else
-          print_success "Using existing password"
-        fi
-        ;;
-      no | n)
-        read -sp "Enter new P12 certificate password: " VES_P12_PASSWORD
-        echo ""
+# Validate it's actually a P12 file (check extension)
+if [[ ! "$P12_FILE_PATH" =~ \.p12$ ]]; then
+  print_error "File must have .p12 extension: $P12_FILE_PATH"
+  print_info "Please provide a valid P12 certificate file"
+  exit 1
+fi
+
+print_success "Found P12 file: $P12_FILE_PATH"
+
+# Prompt for P12 password (securely) - support environment variable
+echo ""
+
+# Check if password already set in environment
+if [ -n "$VES_P12_PASSWORD" ]; then
+  print_info "P12 password found in environment variable"
+  echo ""
+  read -p "Use existing password? (yes/no/show): " PASSWORD_CHOICE
+
+  case "${PASSWORD_CHOICE,,}" in
+    yes | y | "")
+      print_success "Using existing password from environment"
+      ;;
+    show)
+      echo "Current password: $VES_P12_PASSWORD"
+      read -p "Press Enter to use this password, or type new password: " NEW_PASSWORD
+      if [ -n "$NEW_PASSWORD" ]; then
+        VES_P12_PASSWORD="$NEW_PASSWORD"
         print_success "Using new password"
-        ;;
-      *)
-        print_error "Invalid choice. Please answer yes, no, or show."
-        exit 1
-        ;;
-    esac
-  else
-    # No existing password - prompt securely
-    read -sp "Enter the P12 certificate password: " VES_P12_PASSWORD
-    echo ""
-    print_success "P12 password received"
-  fi
-
-  # Validate password is not empty
-  if [ -z "$VES_P12_PASSWORD" ]; then
-    print_error "P12 password cannot be empty"
-    exit 1
-  fi
-
-  # Extract certificate and private key using openssl
+      else
+        print_success "Using existing password"
+      fi
+      ;;
+    no | n)
+      read -sp "Enter new P12 certificate password: " VES_P12_PASSWORD
+      echo ""
+      print_success "Using new password"
+      ;;
+    *)
+      print_error "Invalid choice. Please answer yes, no, or show."
+      exit 1
+      ;;
+  esac
+else
+  # No existing password - prompt securely
+  read -sp "Enter the P12 certificate password: " VES_P12_PASSWORD
   echo ""
-  print_info "Extracting certificate and private key from P12 file..."
+  print_success "P12 password received"
+fi
 
-  # Set output paths
-  CERT_FILE="$HOME/vescred.cert"
-  KEY_FILE="$HOME/vesprivate.key"
+# Validate password is not empty
+if [ -z "$VES_P12_PASSWORD" ]; then
+  print_error "P12 password cannot be empty"
+  exit 1
+fi
 
-  # Extract certificate using stdin for password (more reliable across platforms)
-  # Note: OpenSSL 3.x requires explicit provider flags for legacy algorithms (RC2-40-CBC)
-  # F5 XC P12 files use pbeWithSHA1And40BitRC2-CBC encryption
-  if ! echo "$VES_P12_PASSWORD" | openssl pkcs12 \
-    -in "$P12_FILE_PATH" \
-    -passin stdin \
-    -nodes \
-    -nokeys \
-    -provider legacy \
-    -provider default \
-    -out "$CERT_FILE" 2>&1 | grep -v "^MAC verified OK$"; then
-    print_error "Failed to extract certificate from P12 file"
-    print_info "Verify the P12 password is correct and file is not corrupted"
-    exit 1
-  fi
+# Extract certificate and private key using openssl
+echo ""
+print_info "Extracting certificate and private key from P12 file..."
 
-  # Extract private key using stdin for password (more reliable across platforms)
-  # Note: OpenSSL 3.x requires explicit provider flags for legacy algorithms (RC2-40-CBC)
-  # F5 XC P12 files use pbeWithSHA1And40BitRC2-CBC encryption
-  if ! echo "$VES_P12_PASSWORD" | openssl pkcs12 \
-    -in "$P12_FILE_PATH" \
-    -passin stdin \
-    -nodes \
-    -nocerts \
-    -provider legacy \
-    -provider default \
-    -out "$KEY_FILE" 2>&1 | grep -v "^MAC verified OK$"; then
-    print_error "Failed to extract private key from P12 file"
-    rm -f "$CERT_FILE" # Clean up partial extraction
-    exit 1
-  fi
+# Set output paths
+CERT_FILE="$HOME/vescred.cert"
+KEY_FILE="$HOME/vesprivate.key"
 
-  # Set restrictive permissions
-  chmod 600 "$CERT_FILE" "$KEY_FILE"
+# Extract certificate using stdin for password (more reliable across platforms)
+# Note: OpenSSL 3.x requires explicit provider flags for legacy algorithms (RC2-40-CBC)
+# F5 XC P12 files use pbeWithSHA1And40BitRC2-CBC encryption
+echo "$VES_P12_PASSWORD" | openssl pkcs12 \
+  -in "$P12_FILE_PATH" \
+  -passin stdin \
+  -nodes \
+  -nokeys \
+  -provider legacy \
+  -provider default \
+  -out "$CERT_FILE" 2>&1 | grep -v "^MAC verified OK$" || true
 
-  print_success "Certificate extracted: $CERT_FILE"
-  print_success "Private key extracted: $KEY_FILE"
+if [ ! -f "$CERT_FILE" ] || [ ! -s "$CERT_FILE" ]; then
+  print_error "Failed to extract certificate from P12 file"
+  print_info "Verify the P12 password is correct and file is not corrupted"
+  exit 1
+fi
 
-  # Create .vesconfig file
-  echo ""
-  print_info "Creating .vesconfig file..."
+# Extract private key using stdin for password (more reliable across platforms)
+# Note: OpenSSL 3.x requires explicit provider flags for legacy algorithms (RC2-40-CBC)
+# F5 XC P12 files use pbeWithSHA1And40BitRC2-CBC encryption
+echo "$VES_P12_PASSWORD" | openssl pkcs12 \
+  -in "$P12_FILE_PATH" \
+  -passin stdin \
+  -nodes \
+  -nocerts \
+  -provider legacy \
+  -provider default \
+  -out "$KEY_FILE" 2>&1 | grep -v "^MAC verified OK$" || true
 
-  VESCONFIG_FILE="$HOME/.vesconfig"
-  cat >"$VESCONFIG_FILE" <<EOF
+if [ ! -f "$KEY_FILE" ] || [ ! -s "$KEY_FILE" ]; then
+  print_error "Failed to extract private key from P12 file"
+  rm -f "$CERT_FILE" # Clean up partial extraction
+  exit 1
+fi
+
+# Set restrictive permissions
+chmod 600 "$CERT_FILE" "$KEY_FILE"
+
+print_success "Certificate extracted: $CERT_FILE"
+print_success "Private key extracted: $KEY_FILE"
+
+# Create .vesconfig file
+echo ""
+print_info "Creating .vesconfig file..."
+
+VESCONFIG_FILE="$HOME/.vesconfig"
+cat >"$VESCONFIG_FILE" <<EOF
 server-urls: $VOLT_API_URL
 key: $KEY_FILE
 cert: $CERT_FILE
 EOF
 
-  chmod 600 "$VESCONFIG_FILE"
-  print_success "Created .vesconfig: $VESCONFIG_FILE"
+chmod 600 "$VESCONFIG_FILE"
+print_success "Created .vesconfig: $VESCONFIG_FILE"
 
-  # Base64 encode P12 for environment variable (optional, for Terraform provider)
-  echo ""
-  print_info "Encoding P12 certificate for Terraform provider..."
-  VES_P12_CONTENT=$(base64 -i "$P12_FILE_PATH" | tr -d '\n')
-  print_success "P12 certificate encoded (${#VES_P12_CONTENT} bytes)"
+# Base64 encode P12 for environment variable (optional, for Terraform provider)
+echo ""
+print_info "Encoding P12 certificate for Terraform provider..."
+VES_P12_CONTENT=$(base64 -i "$P12_FILE_PATH" | tr -d '\n')
+print_success "P12 certificate encoded (${#VES_P12_CONTENT} bytes)"
 
-  # Set authentication method flag
-  USE_P12_AUTH=true
-  F5_XC_API_TOKEN="" # Clear token if set
-
-else
-  # API Token fallback (not recommended for Terraform provider)
-  echo ""
-  print_warning "API Tokens are NOT supported by the Terraform provider!"
-  print_warning "The Terraform provider requires certificate-based authentication (P12 or cert/key pair)."
-  echo ""
-  read -p "Do you want to continue with API Token for API-only operations? (yes/no): " CONTINUE_WITH_TOKEN
-
-  if [[ ! "$CONTINUE_WITH_TOKEN" =~ ^[Yy](es)?$ ]]; then
-    print_error "Setup cancelled. Please generate a P12 certificate and re-run this script."
-    exit 1
-  fi
-
-  echo ""
-  echo -e "${YELLOW}API Token Generation Instructions:${NC}"
-  echo "  1. Login to F5 XC Console: https://${F5_XC_TENANT}.console.ves.volterra.io"
-  echo "  2. Navigate to: Administration > Personal Management > Credentials"
-  echo "  3. Click 'Add Credentials' > 'API Token'"
-  echo "  4. Copy the token value"
-  echo ""
-  read -sp "Paste your F5 XC API Token: " F5_XC_API_TOKEN
-  echo ""
-
-  # Validate token is not empty
-  if [ -z "$F5_XC_API_TOKEN" ]; then
-    print_error "API token cannot be empty"
-    exit 1
-  fi
-
-  print_success "API token received (length: ${#F5_XC_API_TOKEN} characters)"
-  print_warning "Remember: This token cannot be used with the Terraform provider!"
-
-  # Set authentication method flag
-  USE_P12_AUTH=false
-  VES_P12_CONTENT=""
-  VES_P12_PASSWORD=""
-fi
+# Set authentication method flag
+USE_P12_AUTH=true
+F5_XC_API_TOKEN="" # Clear token if set
 
 # Create GitHub secrets only if roles were successfully assigned
 # Otherwise, configure manual CLI workflow
