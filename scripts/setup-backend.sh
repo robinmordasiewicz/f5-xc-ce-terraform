@@ -141,6 +141,9 @@ export VES_P12_CONTENT="$VES_P12_CONTENT"
 export VES_P12_PASSWORD="$VES_P12_PASSWORD"
 export TF_VAR_f5_xc_tenant="$F5_XC_TENANT"
 
+# Azure Deployment Configuration
+export TF_VAR_resource_group_name="$RESOURCE_GROUP"
+
 # Alternative: Certificate and Key File Authentication
 # Uncomment these lines and comment out VES_P12_* variables above to use cert/key files:
 # export VOLT_API_CERT="$HOME/vescred.cert"
@@ -166,8 +169,8 @@ export TF_VAR_f5_xc_tenant="$F5_XC_TENANT"
 # Verification:
 #   • Check credentials are loaded: env | grep VOLT
 #   • Check credentials are loaded: env | grep VES_P12
-#   • Check Terraform variables: env | grep TF_VAR_f5_xc
-#   • Terraform should authenticate without prompts
+#   • Check Terraform variables: env | grep TF_VAR
+#   • Terraform should authenticate and plan without prompts
 ENV_FILE_CONTENT
   else
     cat >>"$env_file" <<ENV_FILE_CONTENT
@@ -176,6 +179,9 @@ export VOLT_API_URL="$VOLT_API_URL"
 export VOLT_API_KEY="$F5_XC_API_TOKEN"
 export TF_VAR_f5_xc_tenant="$F5_XC_TENANT"
 export TF_VAR_f5_xc_api_token="$F5_XC_API_TOKEN"
+
+# Azure Deployment Configuration
+export TF_VAR_resource_group_name="$RESOURCE_GROUP"
 
 # WARNING: The Terraform provider does NOT support API tokens!
 #          These credentials can only be used for direct API calls.
