@@ -19,6 +19,18 @@ resource "azurerm_resource_group" "main" {
   tags = var.tags
 }
 
+# Auto-generate SSH key pair if not provided
+resource "tls_private_key" "ce_ssh" {
+  count     = var.ssh_public_key == "" ? 1 : 0
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+# Use provided SSH key or auto-generated one
+locals {
+  ssh_public_key = var.ssh_public_key != "" ? var.ssh_public_key : tls_private_key.ce_ssh[0].public_key_openssh
+}
+
 # T031-T035: Hub VNET Module
 module "hub_vnet" {
   source = "../../modules/azure-hub-vnet"
@@ -89,7 +101,7 @@ module "ce_appstack_1" {
   vm_size             = var.ce_vm_size
   subnet_id           = module.hub_vnet.nva_subnet_id
   registration_token  = module.f5_xc_registration.registration_token
-  ssh_public_key      = var.ssh_public_key
+  ssh_public_key      = local.ssh_public_key
   lb_backend_pool_id  = module.load_balancer.backend_pool_id
   availability_zone   = "1"
 
@@ -111,7 +123,7 @@ module "ce_appstack_2" {
   vm_size             = var.ce_vm_size
   subnet_id           = module.hub_vnet.nva_subnet_id
   registration_token  = module.f5_xc_registration.registration_token
-  ssh_public_key      = var.ssh_public_key
+  ssh_public_key      = local.ssh_public_key
   lb_backend_pool_id  = module.load_balancer.backend_pool_id
   availability_zone   = "2"
 

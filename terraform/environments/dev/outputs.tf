@@ -97,6 +97,23 @@ output "default_route_next_hop" {
   value       = module.spoke_vnet.default_route_next_hop
 }
 
+# SSH Key Outputs
+output "ssh_key_generated" {
+  description = "Whether SSH key was auto-generated (true) or user-provided (false)"
+  value       = var.ssh_public_key == ""
+}
+
+output "ssh_private_key" {
+  description = "Auto-generated SSH private key for CE VM access (only if auto-generated)"
+  value       = var.ssh_public_key == "" ? tls_private_key.ce_ssh[0].private_key_openssh : "User provided their own SSH key"
+  sensitive   = true
+}
+
+output "ssh_connection_instructions" {
+  description = "Instructions for SSH access to CE VMs"
+  value       = var.ssh_public_key == "" ? "SSH key was auto-generated. To connect to CE VMs:\n\n1. Save the private key:\n   terraform output -raw ssh_private_key > ce_ssh_key.pem\n   chmod 600 ce_ssh_key.pem\n\n2. Connect to CE VM 1:\n   ssh -i ce_ssh_key.pem admin@${module.ce_appstack_1.public_ip}\n\n3. Connect to CE VM 2:\n   ssh -i ce_ssh_key.pem admin@${module.ce_appstack_2.public_ip}\n\nNote: The private key is also stored in the Terraform state file." : "Using user-provided SSH key. Use your own private key to connect."
+}
+
 # Summary Output
 output "deployment_summary" {
   description = "Deployment summary"
@@ -108,5 +125,6 @@ output "deployment_summary" {
     ce_site        = module.f5_xc_registration.site_name
     ce_instances   = [module.ce_appstack_1.vm_name, module.ce_appstack_2.vm_name]
     peering_status = module.spoke_vnet.peering_status
+    ssh_key_status = var.ssh_public_key == "" ? "auto-generated" : "user-provided"
   }
 }
