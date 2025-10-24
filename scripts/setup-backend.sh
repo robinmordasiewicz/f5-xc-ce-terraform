@@ -526,66 +526,166 @@ fi
 echo ""
 print_info "Step 7.5/8: F5 Distributed Cloud (Volterra) Configuration..."
 
-# Prompt for tenant name
 echo ""
 echo -e "${BLUE}F5 Distributed Cloud Provider Configuration${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-read -p "Enter your F5 XC tenant name (e.g., 'my-company' from my-company.console.ves.volterra.io): " F5_XC_TENANT
 
-# Validate tenant name format (lowercase alphanumeric + hyphens, must start/end with alphanumeric)
-if [[ -z "$F5_XC_TENANT" ]]; then
-  print_error "Tenant name cannot be empty"
-  exit 1
-elif [[ ! "$F5_XC_TENANT" =~ ^[a-z0-9][a-z0-9-]*[a-z0-9]$ ]] && [[ ! "$F5_XC_TENANT" =~ ^[a-z0-9]$ ]]; then
-  print_error "Invalid tenant name format. Use lowercase alphanumeric characters and hyphens only."
-  print_info "Tenant name must start and end with alphanumeric character"
-  exit 1
-fi
-
-# Construct API URL
-VOLT_API_URL="https://${F5_XC_TENANT}.console.ves.volterra.io/api"
-print_success "Tenant: $F5_XC_TENANT"
-print_info "API URL: $VOLT_API_URL"
-
-# P12 Certificate Configuration
-echo ""
+# P12 Certificate generation instructions (shown before discovery)
 echo -e "${YELLOW}F5 XC P12 Certificate Authentication${NC}"
 echo "The Terraform provider requires P12 certificate-based authentication."
 echo ""
-
-# P12 Certificate generation instructions
 echo -e "${YELLOW}P12 Certificate Generation Instructions:${NC}"
-echo "  1. Login to F5 XC Console: https://${F5_XC_TENANT}.console.ves.volterra.io"
+echo "  1. Login to F5 XC Console: https://[tenant].console.ves.volterra.io"
 echo "  2. Navigate to: Administration > Personal Management > Credentials"
 echo "  3. Click 'Add Credentials' > 'API Certificate' (NOT API Token!)"
 echo "  4. Download the .p12 file and save the password"
 echo ""
 
-# Check for P12 file in default location first
-DEFAULT_P12_PATH="$HOME/Downloads/${F5_XC_TENANT}.console.ves.volterra.io.api-creds.p12"
+# Discover P12 files in Downloads directory
+print_info "Searching for P12 certificates in ~/Downloads..."
+P12_FILES=()
+while IFS= read -r -d '' file; do
+  P12_FILES+=("$file")
+done < <(find "$HOME/Downloads" -maxdepth 1 -name "*.console.ves.volterra.io.api-creds.p12" -print0 2>/dev/null)
 
-if [ -f "$DEFAULT_P12_PATH" ]; then
-  # Default file exists - show full path and offer to use it
-  print_info "Found P12 file: $DEFAULT_P12_PATH"
+DISCOVERED_TENANT=""
+P12_FILE_PATH=""
+
+if [ ${#P12_FILES[@]} -eq 0 ]; then
+  # No P12 files found - fall back to manual entry
+  print_warning "No P12 certificates found in ~/Downloads/"
   echo ""
-  read -p "Press Enter to use this file, or enter alternate path: " P12_FILE_PATH
 
-  # If user pressed Enter (empty input), use default
-  if [ -z "$P12_FILE_PATH" ]; then
-    P12_FILE_PATH="$DEFAULT_P12_PATH"
-    print_success "Using P12 file: $P12_FILE_PATH"
-  else
-    # Expand tilde to home directory if present
-    P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
+  # Prompt for tenant name first
+  read -p "Enter your F5 XC tenant name (e.g., 'my-company' from my-company.console.ves.volterra.io): " F5_XC_TENANT
+
+  # Validate tenant name format
+  if [[ -z "$F5_XC_TENANT" ]]; then
+    print_error "Tenant name cannot be empty"
+    exit 1
+  elif [[ ! "$F5_XC_TENANT" =~ ^[a-z0-9][a-z0-9-]*[a-z0-9]$ ]] && [[ ! "$F5_XC_TENANT" =~ ^[a-z0-9]$ ]]; then
+    print_error "Invalid tenant name format. Use lowercase alphanumeric characters and hyphens only."
+    print_info "Tenant name must start and end with alphanumeric character"
+    exit 1
   fi
-else
-  # No default file found - prompt for path
-  print_warning "Default P12 file not found at: $DEFAULT_P12_PATH"
+
+  # Then prompt for P12 file path
+  DEFAULT_P12_PATH="$HOME/Downloads/${F5_XC_TENANT}.console.ves.volterra.io.api-creds.p12"
+  print_info "Expected P12 file location: $DEFAULT_P12_PATH"
   echo ""
   read -p "Enter the full path to your P12 certificate file: " P12_FILE_PATH
-  # Expand tilde to home directory if present
   P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
+
+elif [ ${#P12_FILES[@]} -eq 1 ]; then
+  # Single P12 file found - auto-select and extract tenant
+  P12_FILE_PATH="${P12_FILES[0]}"
+  FILENAME=$(basename "$P12_FILE_PATH")
+
+  # Extract tenant ID from filename (everything before .console.ves.volterra.io)
+  DISCOVERED_TENANT=$(echo "$FILENAME" | sed 's/\.console\.ves\.volterra\.io\.api-creds\.p12$//')
+
+  print_success "Found P12 certificate: $P12_FILE_PATH"
+  print_info "Extracted tenant ID: $DISCOVERED_TENANT"
+  echo ""
+
+  # Prompt for tenant confirmation with extracted value as default
+  read -p "Press Enter to use tenant '$DISCOVERED_TENANT', or type a different tenant name: " USER_TENANT
+
+  if [ -z "$USER_TENANT" ]; then
+    F5_XC_TENANT="$DISCOVERED_TENANT"
+    print_success "Using tenant: $F5_XC_TENANT"
+  else
+    F5_XC_TENANT="$USER_TENANT"
+    print_info "Using custom tenant: $F5_XC_TENANT"
+
+    # Validate custom tenant name format
+    if [[ ! "$F5_XC_TENANT" =~ ^[a-z0-9][a-z0-9-]*[a-z0-9]$ ]] && [[ ! "$F5_XC_TENANT" =~ ^[a-z0-9]$ ]]; then
+      print_error "Invalid tenant name format. Use lowercase alphanumeric characters and hyphens only."
+      print_info "Tenant name must start and end with alphanumeric character"
+      exit 1
+    fi
+  fi
+
+else
+  # Multiple P12 files found - show selection menu
+  print_success "Found ${#P12_FILES[@]} P12 certificates:"
+  echo ""
+
+  for i in "${!P12_FILES[@]}"; do
+    FILENAME=$(basename "${P12_FILES[$i]}")
+    echo "  $((i + 1))) $FILENAME"
+  done
+  echo ""
+
+  # Prompt for selection
+  while true; do
+    read -p "Select certificate (1-${#P12_FILES[@]}): " SELECTION
+
+    # Validate selection is a number in range
+    if [[ "$SELECTION" =~ ^[0-9]+$ ]] && [ "$SELECTION" -ge 1 ] && [ "$SELECTION" -le ${#P12_FILES[@]} ]; then
+      P12_FILE_PATH="${P12_FILES[$((SELECTION - 1))]}"
+      FILENAME=$(basename "$P12_FILE_PATH")
+
+      # Extract tenant ID from selected filename
+      DISCOVERED_TENANT=$(echo "$FILENAME" | sed 's/\.console\.ves\.volterra\.io\.api-creds\.p12$//')
+
+      print_success "Selected: $FILENAME"
+      print_info "Extracted tenant ID: $DISCOVERED_TENANT"
+      echo ""
+
+      # Prompt for tenant confirmation with extracted value as default
+      read -p "Press Enter to use tenant '$DISCOVERED_TENANT', or type a different tenant name: " USER_TENANT
+
+      if [ -z "$USER_TENANT" ]; then
+        F5_XC_TENANT="$DISCOVERED_TENANT"
+        print_success "Using tenant: $F5_XC_TENANT"
+      else
+        F5_XC_TENANT="$USER_TENANT"
+        print_info "Using custom tenant: $F5_XC_TENANT"
+
+        # Validate custom tenant name format
+        if [[ ! "$F5_XC_TENANT" =~ ^[a-z0-9][a-z0-9-]*[a-z0-9]$ ]] && [[ ! "$F5_XC_TENANT" =~ ^[a-z0-9]$ ]]; then
+          print_error "Invalid tenant name format. Use lowercase alphanumeric characters and hyphens only."
+          print_info "Tenant name must start and end with alphanumeric character"
+          exit 1
+        fi
+      fi
+      break
+    else
+      print_error "Invalid selection. Please enter a number between 1 and ${#P12_FILES[@]}"
+    fi
+  done
+fi
+
+# Construct API URL
+VOLT_API_URL="https://${F5_XC_TENANT}.console.ves.volterra.io/api"
+echo ""
+print_success "Tenant: $F5_XC_TENANT"
+print_info "API URL: $VOLT_API_URL"
+echo ""
+
+# If P12 file path not set yet (manual entry), prompt for it now
+if [ -z "$P12_FILE_PATH" ]; then
+  DEFAULT_P12_PATH="$HOME/Downloads/${F5_XC_TENANT}.console.ves.volterra.io.api-creds.p12"
+
+  if [ -f "$DEFAULT_P12_PATH" ]; then
+    print_info "Found P12 file: $DEFAULT_P12_PATH"
+    echo ""
+    read -p "Press Enter to use this file, or enter alternate path: " USER_P12_PATH
+
+    if [ -z "$USER_P12_PATH" ]; then
+      P12_FILE_PATH="$DEFAULT_P12_PATH"
+      print_success "Using P12 file: $P12_FILE_PATH"
+    else
+      P12_FILE_PATH="${USER_P12_PATH/#\~/$HOME}"
+    fi
+  else
+    print_warning "Default P12 file not found at: $DEFAULT_P12_PATH"
+    echo ""
+    read -p "Enter the full path to your P12 certificate file: " P12_FILE_PATH
+    P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
+  fi
 fi
 
 # Validate P12 file exists
