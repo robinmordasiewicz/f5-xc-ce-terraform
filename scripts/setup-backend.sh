@@ -568,11 +568,30 @@ if [[ "$HAS_P12_CERT" =~ ^[Yy](es)?$ ]]; then
   echo "  4. Download the .p12 file and save the password"
   echo ""
 
-  # Prompt for P12 file path
-  read -p "Enter the full path to your P12 certificate file: " P12_FILE_PATH
+  # Check for P12 file in default location first
+  DEFAULT_P12_PATH="$HOME/Downloads/${F5_XC_TENANT}.console.ves.volterra.io.api-creds.p12"
 
-  # Expand tilde to home directory if present
-  P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
+  if [ -f "$DEFAULT_P12_PATH" ]; then
+    print_info "Found P12 file in default location: $DEFAULT_P12_PATH"
+    echo ""
+    read -p "Use this P12 file? (yes/no): " USE_DEFAULT_P12
+
+    if [[ "$USE_DEFAULT_P12" =~ ^[Yy](es)?$ ]]; then
+      P12_FILE_PATH="$DEFAULT_P12_PATH"
+      print_success "Using default P12 file: $P12_FILE_PATH"
+    else
+      echo ""
+      read -p "Enter the full path to your P12 certificate file: " P12_FILE_PATH
+      # Expand tilde to home directory if present
+      P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
+    fi
+  else
+    # No default file found - prompt for path
+    echo ""
+    read -p "Enter the full path to your P12 certificate file: " P12_FILE_PATH
+    # Expand tilde to home directory if present
+    P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
+  fi
 
   # Validate P12 file exists
   if [ ! -f "$P12_FILE_PATH" ]; then
@@ -582,18 +601,51 @@ if [[ "$HAS_P12_CERT" =~ ^[Yy](es)?$ ]]; then
 
   print_success "Found P12 file: $P12_FILE_PATH"
 
-  # Prompt for P12 password (securely)
+  # Prompt for P12 password (securely) - support environment variable
   echo ""
-  read -sp "Enter the P12 certificate password: " VES_P12_PASSWORD
-  echo ""
+
+  # Check if password already set in environment
+  if [ -n "$VES_P12_PASSWORD" ]; then
+    print_info "P12 password found in environment variable"
+    echo ""
+    read -p "Use existing password? (yes/no/show): " PASSWORD_CHOICE
+
+    case "${PASSWORD_CHOICE,,}" in
+      yes | y | "")
+        print_success "Using existing password from environment"
+        ;;
+      show)
+        echo "Current password: $VES_P12_PASSWORD"
+        read -p "Press Enter to use this password, or type new password: " NEW_PASSWORD
+        if [ -n "$NEW_PASSWORD" ]; then
+          VES_P12_PASSWORD="$NEW_PASSWORD"
+          print_success "Using new password"
+        else
+          print_success "Using existing password"
+        fi
+        ;;
+      no | n)
+        read -sp "Enter new P12 certificate password: " VES_P12_PASSWORD
+        echo ""
+        print_success "Using new password"
+        ;;
+      *)
+        print_error "Invalid choice. Please answer yes, no, or show."
+        exit 1
+        ;;
+    esac
+  else
+    # No existing password - prompt securely
+    read -sp "Enter the P12 certificate password: " VES_P12_PASSWORD
+    echo ""
+    print_success "P12 password received"
+  fi
 
   # Validate password is not empty
   if [ -z "$VES_P12_PASSWORD" ]; then
     print_error "P12 password cannot be empty"
     exit 1
   fi
-
-  print_success "P12 password received"
 
   # Extract certificate and private key using openssl
   echo ""
@@ -603,25 +655,29 @@ if [[ "$HAS_P12_CERT" =~ ^[Yy](es)?$ ]]; then
   CERT_FILE="$HOME/vescred.cert"
   KEY_FILE="$HOME/vesprivate.key"
 
-  # Extract certificate (without password in command for security)
-  if ! OPENSSL_PASS="$VES_P12_PASSWORD" openssl pkcs12 \
+  # Extract certificate using stdin for password (more reliable across platforms)
+  # Note: -legacy flag required for OpenSSL 3.x with older P12 files using RC2 encryption
+  if ! echo "$VES_P12_PASSWORD" | openssl pkcs12 \
     -in "$P12_FILE_PATH" \
-    -passin env:OPENSSL_PASS \
+    -passin stdin \
     -nodes \
     -nokeys \
-    -out "$CERT_FILE" 2>/dev/null; then
+    -legacy \
+    -out "$CERT_FILE" 2>&1 | grep -v "^MAC verified OK$"; then
     print_error "Failed to extract certificate from P12 file"
-    print_info "Verify the P12 password is correct"
+    print_info "Verify the P12 password is correct and file is not corrupted"
     exit 1
   fi
 
-  # Extract private key (without password in command for security)
-  if ! OPENSSL_PASS="$VES_P12_PASSWORD" openssl pkcs12 \
+  # Extract private key using stdin for password (more reliable across platforms)
+  # Note: -legacy flag required for OpenSSL 3.x with older P12 files using RC2 encryption
+  if ! echo "$VES_P12_PASSWORD" | openssl pkcs12 \
     -in "$P12_FILE_PATH" \
-    -passin env:OPENSSL_PASS \
+    -passin stdin \
     -nodes \
     -nocerts \
-    -out "$KEY_FILE" 2>/dev/null; then
+    -legacy \
+    -out "$KEY_FILE" 2>&1 | grep -v "^MAC verified OK$"; then
     print_error "Failed to extract private key from P12 file"
     rm -f "$CERT_FILE" # Clean up partial extraction
     exit 1
