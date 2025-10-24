@@ -713,8 +713,8 @@ if [ -n "$VES_P12_PASSWORD" ]; then
   echo ""
   read -p "Use existing password? (yes/no/show): " PASSWORD_CHOICE
 
-  case "${PASSWORD_CHOICE,,}" in
-    yes | y | "")
+  case "$PASSWORD_CHOICE" in
+    yes | YES | y | Y | "")
       print_success "Using existing password from environment"
       ;;
     show)
@@ -727,7 +727,7 @@ if [ -n "$VES_P12_PASSWORD" ]; then
         print_success "Using existing password"
       fi
       ;;
-    no | n)
+    no | NO | n | N)
       read -sp "Enter new P12 certificate password: " VES_P12_PASSWORD
       echo ""
       print_success "Using new password"
