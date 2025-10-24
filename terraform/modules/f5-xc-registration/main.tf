@@ -33,47 +33,10 @@ resource "volterra_securemesh_site_v2" "ce_site" {
   }
 
   # Azure provider configuration
+  # NOTE: not_managed block without node_list - F5 XC auto-discovers nodes
+  # Nodes will register automatically using the site registration token
   azure {
-    not_managed {
-      node_list {
-        hostname = var.site_name
-
-        # Configure interface for Site Local Inside (SLI) network
-        interface_list {
-          # Use existing Azure VNET subnet
-          name        = "eth0"
-          description = "Inside network interface for hub VNET connectivity"
-
-          # Ethernet interface configuration
-          ethernet_interface {
-            device = "eth0"
-          }
-
-          # DHCP client for IP assignment
-          dhcp_client = true
-
-          # No IPv6 address
-          no_ipv6_address = true
-
-          # Network option: Site Local Inside (Local VRF)
-          network_option {
-            site_local_inside_network = true
-          }
-
-          # Enable site-to-site connectivity on this interface
-          site_to_site_connectivity_interface_enabled = true
-
-          # Interface priority
-          priority = 1
-
-          # Enable monitoring
-          monitor_disabled = false
-        }
-
-        # Node type
-        type = "Control"
-      }
-    }
+    not_managed {}
   }
 
   # Performance enhancement mode (L7 optimized)

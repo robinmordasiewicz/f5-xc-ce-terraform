@@ -7,8 +7,7 @@
 # - Internal load balancer
 # - Backend address pool
 # - Health probes (TCP 65500, HTTPS 65443)
-# - Load balancing rules
-# - HA ports rule (all protocols, all ports)
+# - Load balancing rules (HTTP:80, HTTPS:443)
 
 terraform {
   required_providers {
@@ -93,17 +92,10 @@ resource "azurerm_lb_rule" "http" {
   load_distribution              = "SourceIPProtocol"
 }
 
-# T045: HA Ports Rule (all protocols, all ports)
-# This enables all traffic to flow through the CE NVAs for full NVA functionality
-resource "azurerm_lb_rule" "ha_ports" {
-  loadbalancer_id                = azurerm_lb.internal.id
-  name                           = "HAPortsRule"
-  protocol                       = "All"
-  frontend_port                  = 0 # All ports
-  backend_port                   = 0 # All ports
-  frontend_ip_configuration_name = "LoadBalancerFrontEnd"
-  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.ce_pool.id]
-  probe_id                       = azurerm_lb_probe.ce_tcp.id
-  enable_floating_ip             = true # Required for HA ports
-  idle_timeout_in_minutes        = 4
-}
+# NOTE: HA Ports rule removed due to Azure constraint
+# Azure does not allow HA Ports rule (protocol=All, port=0) to coexist
+# with specific port rules (HTTP:80, HTTPS:443) on the same frontend IP.
+# For full NVA functionality requiring all ports, would need:
+# - Separate frontend IP configuration for HA ports, OR
+# - Remove HTTP/HTTPS specific rules and use HA ports only
+# Current implementation uses specific port rules for HTTP/HTTPS traffic.
