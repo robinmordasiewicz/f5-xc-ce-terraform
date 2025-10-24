@@ -26,6 +26,11 @@ terraform {
       source  = "volterraedge/volterra"
       version = "~> 0.11"
     }
+
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
 }
 

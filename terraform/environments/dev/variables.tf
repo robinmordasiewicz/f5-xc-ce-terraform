@@ -88,8 +88,9 @@ variable "ce_vm_size" {
 }
 
 variable "ssh_public_key" {
-  description = "SSH public key for CE VM access"
+  description = "SSH public key for CE VM access (optional - will be auto-generated if not provided)"
   type        = string
+  default     = ""
 }
 
 # Tags
