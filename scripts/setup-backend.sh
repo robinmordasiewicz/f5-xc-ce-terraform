@@ -568,11 +568,30 @@ if [[ "$HAS_P12_CERT" =~ ^[Yy](es)?$ ]]; then
   echo "  4. Download the .p12 file and save the password"
   echo ""
 
-  # Prompt for P12 file path
-  read -p "Enter the full path to your P12 certificate file: " P12_FILE_PATH
+  # Check for P12 file in default location first
+  DEFAULT_P12_PATH="$HOME/Downloads/${F5_XC_TENANT}.console.ves.volterra.io.api-creds.p12"
 
-  # Expand tilde to home directory if present
-  P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
+  if [ -f "$DEFAULT_P12_PATH" ]; then
+    print_info "Found P12 file in default location: $DEFAULT_P12_PATH"
+    echo ""
+    read -p "Use this P12 file? (yes/no): " USE_DEFAULT_P12
+
+    if [[ "$USE_DEFAULT_P12" =~ ^[Yy](es)?$ ]]; then
+      P12_FILE_PATH="$DEFAULT_P12_PATH"
+      print_success "Using default P12 file: $P12_FILE_PATH"
+    else
+      echo ""
+      read -p "Enter the full path to your P12 certificate file: " P12_FILE_PATH
+      # Expand tilde to home directory if present
+      P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
+    fi
+  else
+    # No default file found - prompt for path
+    echo ""
+    read -p "Enter the full path to your P12 certificate file: " P12_FILE_PATH
+    # Expand tilde to home directory if present
+    P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
+  fi
 
   # Validate P12 file exists
   if [ ! -f "$P12_FILE_PATH" ]; then
