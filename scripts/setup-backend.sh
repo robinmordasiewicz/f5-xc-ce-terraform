@@ -308,8 +308,21 @@ fi
 echo ""
 print_info "Step 2/8: Creating storage account..."
 
-if az storage account show --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
-  print_warning "Storage account '$STORAGE_ACCOUNT' already exists"
+# Check if storage account exists in ANY resource group (storage account names are globally unique)
+EXISTING_RG=$(az storage account list --query "[?name=='$STORAGE_ACCOUNT'].resourceGroup" -o tsv 2>/dev/null | head -n1)
+
+if [ -n "$EXISTING_RG" ]; then
+  if [ "$EXISTING_RG" = "$RESOURCE_GROUP" ]; then
+    print_warning "Storage account '$STORAGE_ACCOUNT' already exists in resource group '$RESOURCE_GROUP'"
+  else
+    print_error "Storage account '$STORAGE_ACCOUNT' already exists in different resource group: '$EXISTING_RG'"
+    print_info "Storage account names are globally unique in Azure"
+    print_info "Options:"
+    print_info "  1. Use existing account: export RESOURCE_GROUP='$EXISTING_RG' and re-run"
+    print_info "  2. Choose different storage account name: export STORAGE_ACCOUNT='new-name' and re-run"
+    print_info "  3. Delete existing account if unused: az storage account delete --name '$STORAGE_ACCOUNT' --resource-group '$EXISTING_RG'"
+    exit 1
+  fi
 else
   az storage account create \
     --name "$STORAGE_ACCOUNT" \
