@@ -528,7 +528,7 @@ print_info "Step 7.5/8: F5 Distributed Cloud (Volterra) Configuration..."
 
 # Prompt for tenant name
 echo ""
-echo "${BLUE}F5 Distributed Cloud Provider Configuration${NC}"
+echo -e "${BLUE}F5 Distributed Cloud Provider Configuration${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 read -p "Enter your F5 XC tenant name (e.g., 'my-company' from my-company.console.ves.volterra.io): " F5_XC_TENANT
@@ -550,7 +550,7 @@ print_info "API URL: $VOLT_API_URL"
 
 # Prompt for P12 certificate or API Token
 echo ""
-echo "${YELLOW}F5 XC Authentication Methods:${NC}"
+echo -e "${YELLOW}F5 XC Authentication Methods:${NC}"
 echo "  1. API Certificate (P12 file) - Recommended for Terraform provider"
 echo "  2. API Token (string) - For direct API calls only"
 echo ""
@@ -561,7 +561,7 @@ read -p "Do you have a P12 certificate file? (yes/no): " HAS_P12_CERT
 if [[ "$HAS_P12_CERT" =~ ^[Yy](es)?$ ]]; then
   # P12 Certificate path
   echo ""
-  echo "${YELLOW}P12 Certificate Generation Instructions:${NC}"
+  echo -e "${YELLOW}P12 Certificate Generation Instructions:${NC}"
   echo "  1. Login to F5 XC Console: https://${F5_XC_TENANT}.console.ves.volterra.io"
   echo "  2. Navigate to: Administration > Personal Management > Credentials"
   echo "  3. Click 'Add Credentials' > 'API Certificate' (NOT API Token!)"
@@ -574,16 +574,16 @@ if [[ "$HAS_P12_CERT" =~ ^[Yy](es)?$ ]]; then
   if [ -f "$DEFAULT_P12_PATH" ]; then
     print_info "Found P12 file in default location: $DEFAULT_P12_PATH"
     echo ""
-    read -p "Use this P12 file? (yes/no): " USE_DEFAULT_P12
+    read -p "Press Enter to use default, or enter alternate path: " P12_FILE_PATH
 
-    if [[ "$USE_DEFAULT_P12" =~ ^[Yy](es)?$ ]]; then
+    # If user pressed Enter (empty input), use default
+    if [ -z "$P12_FILE_PATH" ]; then
       P12_FILE_PATH="$DEFAULT_P12_PATH"
       print_success "Using default P12 file: $P12_FILE_PATH"
     else
-      echo ""
-      read -p "Enter the full path to your P12 certificate file: " P12_FILE_PATH
       # Expand tilde to home directory if present
       P12_FILE_PATH="${P12_FILE_PATH/#\~/$HOME}"
+      print_success "Using specified P12 file: $P12_FILE_PATH"
     fi
   else
     # No default file found - prompt for path
@@ -656,13 +656,15 @@ if [[ "$HAS_P12_CERT" =~ ^[Yy](es)?$ ]]; then
   KEY_FILE="$HOME/vesprivate.key"
 
   # Extract certificate using stdin for password (more reliable across platforms)
-  # Note: -legacy flag required for OpenSSL 3.x with older P12 files using RC2 encryption
+  # Note: OpenSSL 3.x requires explicit provider flags for legacy algorithms (RC2-40-CBC)
+  # F5 XC P12 files use pbeWithSHA1And40BitRC2-CBC encryption
   if ! echo "$VES_P12_PASSWORD" | openssl pkcs12 \
     -in "$P12_FILE_PATH" \
     -passin stdin \
     -nodes \
     -nokeys \
-    -legacy \
+    -provider legacy \
+    -provider default \
     -out "$CERT_FILE" 2>&1 | grep -v "^MAC verified OK$"; then
     print_error "Failed to extract certificate from P12 file"
     print_info "Verify the P12 password is correct and file is not corrupted"
@@ -670,13 +672,15 @@ if [[ "$HAS_P12_CERT" =~ ^[Yy](es)?$ ]]; then
   fi
 
   # Extract private key using stdin for password (more reliable across platforms)
-  # Note: -legacy flag required for OpenSSL 3.x with older P12 files using RC2 encryption
+  # Note: OpenSSL 3.x requires explicit provider flags for legacy algorithms (RC2-40-CBC)
+  # F5 XC P12 files use pbeWithSHA1And40BitRC2-CBC encryption
   if ! echo "$VES_P12_PASSWORD" | openssl pkcs12 \
     -in "$P12_FILE_PATH" \
     -passin stdin \
     -nodes \
     -nocerts \
-    -legacy \
+    -provider legacy \
+    -provider default \
     -out "$KEY_FILE" 2>&1 | grep -v "^MAC verified OK$"; then
     print_error "Failed to extract private key from P12 file"
     rm -f "$CERT_FILE" # Clean up partial extraction
@@ -727,7 +731,7 @@ else
   fi
 
   echo ""
-  echo "${YELLOW}API Token Generation Instructions:${NC}"
+  echo -e "${YELLOW}API Token Generation Instructions:${NC}"
   echo "  1. Login to F5 XC Console: https://${F5_XC_TENANT}.console.ves.volterra.io"
   echo "  2. Navigate to: Administration > Personal Management > Credentials"
   echo "  3. Click 'Add Credentials' > 'API Token'"
