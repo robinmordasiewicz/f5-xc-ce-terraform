@@ -11,9 +11,13 @@
 #
 # User Story 1 MVP: Initial CE deployment with hub-and-spoke and CI/CD
 
-# Azure Resource Group
+# Azure Resource Group for Infrastructure
+# NOTE: This is DIFFERENT from the backend storage resource group
+# - Backend RG: {username}-{tenant}-{repo}-tfstate (managed by setup-backend.sh, stores Terraform state)
+# - Infrastructure RG: {username}-{tenant}-{repo}-infra (managed by Terraform, holds CE/VNET/LB resources)
+# This separation prevents circular dependency where Terraform manages the RG storing its own state
 resource "azurerm_resource_group" "main" {
-  name     = var.resource_group_name
+  name     = "${var.resource_group_name}-infra"
   location = var.azure_region
 
   tags = var.tags
