@@ -261,7 +261,9 @@ fi
 
 # Configuration with improved naming to prevent conflicts
 # Azure resource group naming: alphanumeric + hyphens, max 90 chars
-RESOURCE_GROUP="${RESOURCE_GROUP:-${AZURE_USERNAME}-${GITHUB_REPO}-tfstate}"
+# Include tenant hash for multi-tenant isolation (8 chars, consistent with storage account pattern)
+TENANT_PREFIX=$(echo -n "$TENANT_ID" | md5sum | cut -c1-8)
+RESOURCE_GROUP="${RESOURCE_GROUP:-${AZURE_USERNAME}-${TENANT_PREFIX}-${GITHUB_REPO}-tfstate}"
 LOCATION="${LOCATION:-eastus}"
 # Storage account: lowercase alphanumeric only, 3-24 chars, globally unique
 # Format: tfstate + username_prefix(8) + unique_hash(8) = 23 chars total
