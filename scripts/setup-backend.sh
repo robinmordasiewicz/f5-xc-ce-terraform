@@ -661,14 +661,16 @@ KEY_FILE="$HOME/vesprivate.key"
 # Extract certificate using stdin for password (more reliable across platforms)
 # Note: OpenSSL 3.x requires explicit provider flags for legacy algorithms (RC2-40-CBC)
 # F5 XC P12 files use pbeWithSHA1And40BitRC2-CBC encryption
-if ! echo "$VES_P12_PASSWORD" | openssl pkcs12 \
+echo "$VES_P12_PASSWORD" | openssl pkcs12 \
   -in "$P12_FILE_PATH" \
   -passin stdin \
   -nodes \
   -nokeys \
   -provider legacy \
   -provider default \
-  -out "$CERT_FILE" 2>&1 | grep -v "^MAC verified OK$"; then
+  -out "$CERT_FILE" 2>&1 | grep -v "^MAC verified OK$" || true
+
+if [ ! -f "$CERT_FILE" ] || [ ! -s "$CERT_FILE" ]; then
   print_error "Failed to extract certificate from P12 file"
   print_info "Verify the P12 password is correct and file is not corrupted"
   exit 1
@@ -677,14 +679,16 @@ fi
 # Extract private key using stdin for password (more reliable across platforms)
 # Note: OpenSSL 3.x requires explicit provider flags for legacy algorithms (RC2-40-CBC)
 # F5 XC P12 files use pbeWithSHA1And40BitRC2-CBC encryption
-if ! echo "$VES_P12_PASSWORD" | openssl pkcs12 \
+echo "$VES_P12_PASSWORD" | openssl pkcs12 \
   -in "$P12_FILE_PATH" \
   -passin stdin \
   -nodes \
   -nocerts \
   -provider legacy \
   -provider default \
-  -out "$KEY_FILE" 2>&1 | grep -v "^MAC verified OK$"; then
+  -out "$KEY_FILE" 2>&1 | grep -v "^MAC verified OK$" || true
+
+if [ ! -f "$KEY_FILE" ] || [ ! -s "$KEY_FILE" ]; then
   print_error "Failed to extract private key from P12 file"
   rm -f "$CERT_FILE" # Clean up partial extraction
   exit 1
