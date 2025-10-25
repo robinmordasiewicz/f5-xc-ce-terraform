@@ -30,3 +30,12 @@ variable "subnet_name" {
   description = "Subnet name for CE"
   type        = string
 }
+
+variable "site_labels" {
+  description = "Labels to apply to F5 XC site for identity and traceability"
+  type        = map(string)
+  default = {
+    environment       = "production"
+    deployment_method = "terraform"
+  }
+}

@@ -12,9 +12,9 @@ variable "resource_group_name" {
 }
 
 variable "prefix" {
-  description = "Prefix for all resource names"
+  description = "Prefix for F5 XC CE workload resources (not used for hub infrastructure)"
   type        = string
-  default     = "xc-ce"
+  default     = "f5-xc-ce"
 }
 
 # Hub VNET Configuration
