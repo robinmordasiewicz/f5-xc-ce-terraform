@@ -21,9 +21,9 @@ variable "address_space" {
 }
 
 variable "nva_subnet_name" {
-  description = "Name of the NVA subnet"
+  description = "Name of the NVA/external subnet (Azure CAF: snet-hub-external)"
   type        = string
-  default     = "nva-subnet"
+  default     = "snet-hub-external"
 }
 
 variable "nva_subnet_prefix" {
@@ -32,9 +32,9 @@ variable "nva_subnet_prefix" {
 }
 
 variable "mgmt_subnet_name" {
-  description = "Name of the management subnet"
+  description = "Name of the management subnet (Azure CAF: snet-hub-management)"
   type        = string
-  default     = "management-subnet"
+  default     = "snet-hub-management"
 }
 
 variable "mgmt_subnet_prefix" {

@@ -26,11 +26,8 @@ resource "volterra_securemesh_site_v2" "ce_site" {
   name      = var.site_name
   namespace = var.namespace
 
-  # Site labels
-  labels = {
-    environment = "production"
-    deployment  = "terraform"
-  }
+  # Site labels - includes owner and repository information for traceability
+  labels = var.site_labels
 
   # Azure provider configuration
   # NOTE: not_managed block without node_list - F5 XC auto-discovers nodes

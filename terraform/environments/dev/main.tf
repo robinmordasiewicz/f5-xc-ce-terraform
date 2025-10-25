@@ -33,15 +33,36 @@ resource "tls_private_key" "ce_ssh" {
 # Use provided SSH key or auto-generated one
 locals {
   ssh_public_key = var.ssh_public_key != "" ? var.ssh_public_key : tls_private_key.ce_ssh[0].public_key_openssh
+
+  # Identity information for F5 XC site labels and naming
+  github_user = "robinmordasiewicz"
+  github_repo = "f5-xc-ce-terraform"
+  azure_user  = "r.mordasiewicz"
+
+  # F5 XC site naming with owner identifier
+  f5xc_site_name = "${local.github_user}-f5xc-azure-${var.azure_region}"
+
+  # Comprehensive site labels for traceability
+  site_labels = {
+    owner             = local.azure_user
+    github_user       = local.github_user
+    github_repo       = local.github_repo
+    repo_url          = "github.com-${local.github_user}-${local.github_repo}"
+    environment       = var.tags["environment"]
+    azure_region      = var.azure_region
+    deployment_method = "terraform"
+    managed_by        = "terraform"
+  }
 }
 
 # T031-T035: Hub VNET Module
+# NOTE: Hub uses generic naming (no F5 XC branding) as it can host multiple security devices
 module "hub_vnet" {
   source = "../../modules/azure-hub-vnet"
 
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
-  vnet_name           = "${var.prefix}-hub-vnet"
+  vnet_name           = "hub-vnet" # Generic hub naming (not F5 XC specific)
   address_space       = var.hub_vnet_address_space
   nva_subnet_prefix   = var.hub_nva_subnet_prefix
   mgmt_subnet_prefix  = var.hub_mgmt_subnet_prefix
@@ -67,12 +88,13 @@ module "spoke_vnet" {
 }
 
 # T041-T045: Load Balancer Module
+# Azure CAF naming: lbi- prefix for internal load balancer
 module "load_balancer" {
   source = "../../modules/azure-load-balancer"
 
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
-  lb_name             = "${var.prefix}-ce-lb"
+  lb_name             = "lbi-${var.prefix}" # lbi-f5-xc-ce (Azure CAF: internal LB)
   subnet_id           = module.hub_vnet.nva_subnet_id
   frontend_ip_address = var.lb_frontend_ip
 
@@ -82,26 +104,29 @@ module "load_balancer" {
 }
 
 # T046-T050: F5 XC Registration Module
+# Site name includes owner identifier for traceability
 module "f5_xc_registration" {
   source = "../../modules/f5-xc-registration"
 
-  site_name           = "${var.prefix}-ce-site"
+  site_name           = local.f5xc_site_name # robinmordasiewicz-f5xc-azure-eastus
   namespace           = var.f5_xc_namespace
   azure_region        = var.azure_region
   resource_group_name = azurerm_resource_group.main.name
   vnet_name           = module.hub_vnet.vnet_name
-  subnet_name         = "nva-subnet"
+  subnet_name         = "snet-hub-external" # Updated to Azure CAF naming
+  site_labels         = local.site_labels   # Includes owner, repo, etc.
 
   depends_on = [module.hub_vnet]
 }
 
 # T051-T065: CE AppStack Module (Instance 1)
+# VM naming: f5-xc-ce-vm-01 (clear F5 XC identification)
 module "ce_appstack_1" {
   source = "../../modules/f5-xc-ce-appstack"
 
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
-  vm_name             = "${var.prefix}-ce-01"
+  vm_name             = "${var.prefix}-vm-01" # f5-xc-ce-vm-01
   vm_size             = var.ce_vm_size
   subnet_id           = module.hub_vnet.nva_subnet_id
   registration_token  = module.f5_xc_registration.registration_token
@@ -123,7 +148,7 @@ module "ce_appstack_2" {
 
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
-  vm_name             = "${var.prefix}-ce-02"
+  vm_name             = "${var.prefix}-vm-02" # f5-xc-ce-vm-02
   vm_size             = var.ce_vm_size
   subnet_id           = module.hub_vnet.nva_subnet_id
   registration_token  = module.f5_xc_registration.registration_token
