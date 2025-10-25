@@ -215,8 +215,8 @@ test_target_naming() {
   # Load Balancer - should follow Azure CAF lbi- prefix
   validate_lb_name "$TF_LB_NAME" "^lbi-f5-xc-ce$" "Load Balancer (target: lbi-f5-xc-ce)"
 
-  # F5 XC Site - should include owner identifier
-  validate_f5xc_site_name "$TF_SITE_NAME" "^rmordasiewicz-f5xc-azure-" "F5 XC Site (target: with owner prefix)"
+  # F5 XC Site - should include owner identifier (GitHub username)
+  validate_f5xc_site_name "$TF_SITE_NAME" "^robinmordasiewicz-f5xc-azure-" "F5 XC Site (target: with owner prefix)"
 
   echo ""
 }
@@ -255,7 +255,7 @@ test_f5xc_labels() {
   # Note: This requires F5 XC CLI or API access
   # For now, we'll check if labels are defined in Terraform code
 
-  cd terraform/modules/f5-xc-registration || exit 2
+  cd terraform/environments/dev || exit 2
 
   if [ "$MODE" == "current" ]; then
     # Current: minimal labels
@@ -265,10 +265,10 @@ test_f5xc_labels() {
       test_fail "F5 XC site missing owner label (current: expected to fail)"
     fi
   else
-    # Target: comprehensive labels
+    # Target: comprehensive labels - check site_labels local variable
     local required_labels=("owner" "github_user" "github_repo" "repo_url")
     for label in "${required_labels[@]}"; do
-      if grep -q "\"$label\"" main.tf; then
+      if grep -A 10 "site_labels = {" main.tf | grep -q "$label"; then
         test_pass "F5 XC site has $label label defined"
       else
         test_fail "F5 XC site missing $label label (target requirement)"
