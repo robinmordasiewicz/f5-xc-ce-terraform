@@ -833,19 +833,79 @@ chmod 600 "$CERT_FILE" "$KEY_FILE"
 print_success "Certificate extracted: $CERT_FILE"
 print_success "Private key extracted: $KEY_FILE"
 
-# Create .vesconfig file
+# Create .vesconfig file for vesctl CLI
 echo ""
-print_info "Creating .vesconfig file..."
+print_info "Creating .vesconfig file for vesctl CLI authentication..."
 
 VESCONFIG_FILE="$HOME/.vesconfig"
+
+# Validate certificate and key files exist before creating config
+if [ ! -f "$CERT_FILE" ] || [ ! -s "$CERT_FILE" ]; then
+  print_error "Certificate file not found or empty: $CERT_FILE"
+  exit 1
+fi
+
+if [ ! -f "$KEY_FILE" ] || [ ! -s "$KEY_FILE" ]; then
+  print_error "Private key file not found or empty: $KEY_FILE"
+  exit 1
+fi
+
+# Create .vesconfig with validated paths
 cat >"$VESCONFIG_FILE" <<EOF
+# F5 Distributed Cloud vesctl CLI Configuration
+# Generated: $(date '+%Y-%m-%d %H:%M:%S')
+#
+# This file enables vesctl CLI tools to authenticate with F5 XC Console
+# for managing Customer Edge sites, configurations, and resources.
+#
+# Authentication Method: Certificate-based (extracted from P12)
+# API Endpoint: $VOLT_API_URL
+# Tenant: $F5_XC_TENANT
+
 server-urls: $VOLT_API_URL
 key: $KEY_FILE
 cert: $CERT_FILE
 EOF
 
+# Set restrictive permissions
 chmod 600 "$VESCONFIG_FILE"
-print_success "Created .vesconfig: $VESCONFIG_FILE"
+
+# Verify .vesconfig was created successfully
+if [ ! -f "$VESCONFIG_FILE" ] || [ ! -s "$VESCONFIG_FILE" ]; then
+  print_error "Failed to create .vesconfig file"
+  exit 1
+fi
+
+print_success "Created .vesconfig: $VESCONFIG_FILE (permissions: 600)"
+
+# Verify vesctl can use the configuration
+echo ""
+print_info "Verifying vesctl configuration..."
+
+if command -v vesctl &>/dev/null; then
+  # Test vesctl configuration by checking version
+  if vesctl version &>/dev/null; then
+    print_success "vesctl is installed and can read configuration"
+
+    # Optionally verify API connectivity (non-blocking)
+    print_info "Testing F5 XC API connectivity..."
+    if timeout 10 vesctl configuration list namespace --outfmt json &>/dev/null; then
+      print_success "vesctl successfully authenticated with F5 XC Console"
+      print_info "You can now use vesctl commands to manage F5 XC resources"
+    else
+      print_warning "Could not verify API connectivity (timeout or authentication issue)"
+      print_info "This may be normal if VPN or network restrictions apply"
+      print_info "Try manually: vesctl configuration list namespace"
+    fi
+  else
+    print_warning "vesctl installed but failed version check"
+    print_info "Verify vesctl installation: vesctl version"
+  fi
+else
+  print_warning "vesctl CLI not found - .vesconfig created but cannot verify"
+  print_info "Install vesctl: https://docs.cloud.f5.com/docs/how-to/volterra-automation-tools/apis"
+  print_info "After installation, verify with: vesctl version"
+fi
 
 # Base64 encode P12 for environment variable (optional, for Terraform provider)
 echo ""
