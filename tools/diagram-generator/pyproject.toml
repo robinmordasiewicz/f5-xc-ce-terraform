@@ -1,0 +1,190 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "azure-f5xc-diagram-generator"
+version = "0.1.0"
+description = "Automated Azure and F5 XC infrastructure diagram generator with Lucidchart integration"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Infrastructure Team", email = "infrastructure@example.com"}
+]
+keywords = ["azure", "f5", "distributed-cloud", "terraform", "lucidchart", "infrastructure", "diagram"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Software Development :: Documentation",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    # Azure SDK
+    "azure-identity>=1.14.0",
+    "azure-mgmt-resourcegraph>=8.0.0",
+    "six>=1.16.0",  # Required by azure-mgmt-resourcegraph (transitive dependency)
+
+    # HTTP and OAuth
+    "requests>=2.31.0",
+    "oauthlib>=3.2.2",
+    "requests-oauthlib>=1.3.1",
+
+    # Data validation and settings
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+
+    # Graph processing
+    "networkx>=3.1",
+
+    # CLI and configuration
+    "click>=8.1.7",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+
+    # Logging and output
+    "structlog>=24.1.0",
+    "colorama>=0.4.6",
+    "rich>=13.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.12.0",
+    "responses>=0.24.0",
+
+    # Code quality
+    "ruff>=0.1.9",
+    "black>=23.12.0",
+    "mypy>=1.7.0",
+    "isort>=5.13.0",
+
+    # Type stubs
+    "types-requests>=2.31.0",
+    "types-PyYAML>=6.0.0",
+
+    # Pre-commit
+    "pre-commit>=3.6.0",
+]
+
+[project.scripts]
+generate-diagram = "diagram_generator.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/robinmordasiewicz/f5-xc-ce-terraform"
+Repository = "https://github.com/robinmordasiewicz/f5-xc-ce-terraform"
+Issues = "https://github.com/robinmordasiewicz/f5-xc-ce-terraform/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+diagram_generator = ["py.typed"]
+
+# Ruff configuration (modern, fast linter and formatter)
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]  # Allow unused imports in __init__.py
+"tests/**/*.py" = ["ARG", "S101"]  # Allow assert and unused args in tests
+
+# Black configuration (code formatter)
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+
+# isort configuration (import sorter)
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+
+# MyPy configuration (type checker)
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = "networkx.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "azure.*"
+ignore_missing_imports = true
+
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=diagram_generator",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
