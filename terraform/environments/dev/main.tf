@@ -47,7 +47,7 @@ locals {
     owner             = local.azure_user
     github_user       = local.github_user
     github_repo       = local.github_repo
-    repo_url          = "github.com/${local.github_user}/${local.github_repo}"
+    repo_url          = "github.com-${local.github_user}-${local.github_repo}"
     environment       = var.tags["environment"]
     azure_region      = var.azure_region
     deployment_method = "terraform"
