@@ -1,0 +1,40 @@
+# Example configuration for Azure + F5 XC Diagram Generator
+# Copy this file and customize for your environment
+
+# Terraform Configuration
+terraform_state_path: "./terraform"  # Path to Terraform directory
+
+# Azure Configuration
+azure_subscription_id: "00000000-0000-0000-0000-000000000000"  # Replace with your subscription ID
+azure_auth_method: "azure_cli"  # Options: azure_cli, service_principal, managed_identity
+
+# F5 Distributed Cloud Configuration
+f5xc_tenant: "your-tenant-name"  # Replace with your F5 XC tenant
+f5xc_auth_method: "api_token"  # Options: api_token, p12_certificate
+
+# F5 XC Authentication - API Token (recommended)
+f5xc_api_token: "${F5XC_API_TOKEN}"  # Use environment variable for security
+
+# F5 XC Authentication - P12 Certificate (alternative)
+# f5xc_p12_cert_path: "/path/to/your-cert.p12"
+# f5xc_p12_password: "${F5XC_P12_PASSWORD}"  # Use environment variable
+
+# Lucidchart Configuration
+lucid_client_id: "${LUCID_CLIENT_ID}"  # OAuth client ID
+lucid_client_secret: "${LUCID_CLIENT_SECRET}"  # OAuth client secret
+lucid_redirect_uri: "http://localhost:8080/callback"  # OAuth redirect URI
+
+# Diagram Settings
+diagram_title: "Production Infrastructure"
+auto_layout: true  # Enable automatic layout
+group_by_platform: true  # Group resources by platform (Terraform/Azure/F5 XC)
+group_by_resource_group: true  # Group Azure resources by resource group
+group_by_namespace: true  # Group F5 XC resources by namespace
+
+# Correlation Settings
+enable_drift_detection: true  # Detect configuration drift between Terraform and Azure
+match_by_tags: true  # Correlate resources by tags/labels
+match_by_ip: true  # Correlate resources by IP addresses
+
+# Usage Example:
+# generate-diagram --config example-config.yaml
