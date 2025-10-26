@@ -6,6 +6,7 @@ across Terraform, Azure, and F5 XC resources.
 """
 
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
@@ -140,14 +141,6 @@ class DiagramConfig(BaseModel):
     f5xc_p12_cert_path: Optional[str] = Field(None, description="Path to P12 certificate")
     f5xc_p12_password: Optional[str] = Field(None, description="P12 certificate password")
 
-    # Lucidchart configuration
-    lucid_client_id: str = Field(..., description="Lucidchart OAuth client ID")
-    lucid_client_secret: str = Field(..., description="Lucidchart OAuth client secret")
-    lucid_redirect_uri: HttpUrl = Field(
-        default="http://localhost:8080/callback", description="OAuth redirect URI"
-    )
-    lucid_access_token: Optional[str] = Field(None, description="Pre-obtained access token")
-
     # Diagram settings
     diagram_title: str = Field(default="Azure + F5 XC Infrastructure", description="Diagram title")
     auto_layout: bool = Field(default=True, description="Enable automatic layout")
@@ -211,3 +204,11 @@ class LucidDocument(BaseModel):
     title: str
     pages: List[Dict[str, Any]] = Field(default_factory=list)
     url: Optional[HttpUrl] = None
+
+
+class DrawioDocument(BaseModel):
+    """Draw.io document structure."""
+
+    file_path: Path
+    image_file_path: Path
+    title: str

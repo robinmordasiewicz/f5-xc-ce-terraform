@@ -13,9 +13,8 @@ from pydantic import ValidationError
 
 from diagram_generator.azure_collector import AzureResourceGraphCollector
 from diagram_generator.correlation import ResourceCorrelator
+from diagram_generator.drawio_diagram import DrawioDiagramGenerator
 from diagram_generator.f5xc_collector import F5XCCollector
-from diagram_generator.lucid_auth import LucidAuthClient
-from diagram_generator.lucid_diagram import LucidDiagramGenerator
 from diagram_generator.models import (
     AzureAuthMethod,
     DiagramConfig,
@@ -80,27 +79,14 @@ logger = get_logger(__name__)
     help="F5 XC P12 certificate password",
 )
 @click.option(
-    "--lucid-client-id",
-    envvar="LUCID_CLIENT_ID",
-    required=True,
-    help="Lucidchart OAuth client ID",
-)
-@click.option(
-    "--lucid-client-secret",
-    envvar="LUCID_CLIENT_SECRET",
-    required=True,
-    help="Lucidchart OAuth client secret",
-)
-@click.option(
-    "--lucid-redirect-uri",
-    envvar="LUCID_REDIRECT_URI",
-    default="http://localhost:8080/callback",
-    help="Lucidchart OAuth redirect URI",
-)
-@click.option(
     "--diagram-title",
     default="Azure + F5 XC Infrastructure",
     help="Diagram title",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    help="Output directory for diagram files (default: current directory)",
 )
 @click.option(
     "--no-auto-layout",
@@ -133,20 +119,18 @@ def main(
     f5xc_api_token: Optional[str],
     f5xc_p12_path: Optional[Path],
     f5xc_p12_password: Optional[str],
-    lucid_client_id: str,
-    lucid_client_secret: str,
-    lucid_redirect_uri: str,
     diagram_title: str,
+    output_dir: Optional[Path],
     no_auto_layout: bool,
     no_grouping: bool,
     no_drift_detection: bool,
     verbose: bool,
 ) -> None:
     """
-    Generate Lucidchart diagrams from Azure and F5 XC infrastructure.
+    Generate Draw.io diagrams from Azure and F5 XC infrastructure.
 
     Collects resources from Terraform state, Azure Resource Graph, and F5 XC API,
-    correlates them, and generates a comprehensive infrastructure diagram in Lucidchart.
+    correlates them, and generates a comprehensive infrastructure diagram in Draw.io format.
     """
     # Configure logging
     configure_logging(verbose=verbose)
@@ -168,9 +152,6 @@ def main(
             f5xc_api_token=f5xc_api_token,
             f5xc_p12_path=f5xc_p12_path,
             f5xc_p12_password=f5xc_p12_password,
-            lucid_client_id=lucid_client_id,
-            lucid_client_secret=lucid_client_secret,
-            lucid_redirect_uri=lucid_redirect_uri,
             diagram_title=diagram_title,
             auto_layout=not no_auto_layout,
             group_by_platform=not no_grouping,
@@ -225,31 +206,22 @@ def main(
             for drift in correlated.drift[:5]:  # Show first 5
                 click.echo(f"    - {drift.drift_type}: {drift.resource_address}")
 
-        # Phase 3: Generate and upload diagram
-        click.echo("\n🎨 Phase 3: Generating Lucidchart diagram...")
-
-        # Authenticate with Lucidchart
-        auth_client = LucidAuthClient(
-            client_id=config_data.lucid_client_id,
-            client_secret=config_data.lucid_client_secret,
-            redirect_uri=config_data.lucid_redirect_uri,
-        )
-        auth_client.authenticate()
-        click.echo("  ✓ Authenticated with Lucidchart")
+        # Phase 3: Generate Draw.io diagram
+        click.echo("\n🎨 Phase 3: Generating Draw.io diagram...")
 
         # Generate diagram
-        diagram_generator = LucidDiagramGenerator(
-            auth_client=auth_client,
+        diagram_generator = DrawioDiagramGenerator(
             title=config_data.diagram_title,
             auto_layout=config_data.auto_layout,
             group_by_platform=config_data.group_by_platform,
+            output_dir=output_dir,
         )
-        document = diagram_generator.generate_and_upload(correlated)
+        document = diagram_generator.generate(correlated)
 
         click.echo("\n✅ Diagram generated successfully!")
-        click.echo(f"   Document ID: {document.document_id}")
-        if document.url:
-            click.echo(f"   URL: {document.url}")
+        click.echo(f"   📄 Draw.io file: {document.file_path}")
+        click.echo(f"   🖼️  PNG image: {document.image_file_path}")
+        click.echo(f"   💡 Display PNG in README, link to .drawio for editing")
 
         # Summary
         click.echo("\n📈 Summary:")
@@ -278,9 +250,6 @@ def _build_config(
     f5xc_api_token: Optional[str],
     f5xc_p12_path: Optional[Path],
     f5xc_p12_password: Optional[str],
-    lucid_client_id: str,
-    lucid_client_secret: str,
-    lucid_redirect_uri: str,
     diagram_title: str,
     auto_layout: bool,
     group_by_platform: bool,
@@ -304,9 +273,6 @@ def _build_config(
         f5xc_api_token=f5xc_api_token,
         f5xc_p12_cert_path=str(f5xc_p12_path) if f5xc_p12_path else None,
         f5xc_p12_password=f5xc_p12_password,
-        lucid_client_id=lucid_client_id,
-        lucid_client_secret=lucid_client_secret,
-        lucid_redirect_uri=lucid_redirect_uri,
         diagram_title=diagram_title,
         auto_layout=auto_layout,
         group_by_platform=group_by_platform,
