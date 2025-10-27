@@ -24,10 +24,10 @@ variable "diagram_config" {
     output_dir    = string
   })
   default = {
-    diagram_title = "F5 XC CE Infrastructure"
+    diagram_title = "F5_XC_CE_Infrastructure"
     auto_layout   = true
     enable_drift  = true
-    output_dir    = "." # Repository root (relative to terraform execution path)
+    output_dir    = "../../../" # Repository root (relative to terraform/environments/dev)
   }
 }
 
@@ -103,7 +103,7 @@ resource "null_resource" "infrastructure_diagram" {
 
       if python -m diagram_generator.cli \
         --terraform-path "$TERRAFORM_DIR" \
-        --diagram-title "${var.diagram_config.diagram_title} - $(date +%Y-%m-%d)" \
+        --diagram-title "${var.diagram_config.diagram_title}" \
         --output-dir "${var.diagram_config.output_dir}" \
         --verbose 2>&1 | tee diagram-generation.log; then
         echo "✅ Diagram generated successfully!"
