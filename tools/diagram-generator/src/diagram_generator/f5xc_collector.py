@@ -6,7 +6,7 @@ Retrieves resources from F5 XC via REST API (not vesctl CLI).
 
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 import requests
 
@@ -27,6 +27,8 @@ class F5XCCollector:
         api_token: Optional[str] = None,
         p12_cert_path: Optional[str] = None,
         p12_password: Optional[str] = None,
+        cert_path: Optional[str] = None,
+        key_path: Optional[str] = None,
     ):
         """
         Initialize F5 XC REST API collector.
@@ -35,8 +37,10 @@ class F5XCCollector:
             tenant: F5 XC tenant name
             auth_method: Authentication method to use
             api_token: API token (required if using API_TOKEN auth)
-            p12_cert_path: Path to P12 certificate file (required if using P12_CERTIFICATE auth)
+            p12_cert_path: Path to P12 certificate file (for P12_CERTIFICATE auth if cert/key not provided)
             p12_password: Password for P12 certificate
+            cert_path: Path to PEM certificate file (alternative to P12, for P12_CERTIFICATE auth)
+            key_path: Path to PEM key file (alternative to P12, for P12_CERTIFICATE auth)
 
         Raises:
             AuthenticationError: If authentication configuration is invalid
@@ -50,11 +54,21 @@ class F5XCCollector:
                 raise AuthenticationError("API token required for API_TOKEN auth method")
             self.api_token = api_token
             self.session = self._initialize_token_session()
+        elif auth_method == F5XCAuthMethod.CERTIFICATE:
+            # Certificate authentication using pre-extracted cert/key files
+            if not (cert_path and key_path):
+                raise AuthenticationError("CERTIFICATE auth requires both cert_path and key_path")
+            self.cert_path = cert_path
+            self.key_path = key_path
+            logger.info("Using certificate and key files for authentication")
+            self.session = self._initialize_cert_session()
         elif auth_method == F5XCAuthMethod.P12_CERTIFICATE:
+            # P12 certificate extraction
             if not p12_cert_path:
-                raise AuthenticationError("P12 certificate path required for P12_CERTIFICATE auth")
+                raise AuthenticationError("P12_CERTIFICATE auth requires p12_cert_path")
             self.p12_cert_path = p12_cert_path
             self.p12_password = p12_password
+            logger.info("Will extract certificate and key from P12 file")
             self.session = self._initialize_cert_session()
 
         logger.info(
@@ -81,7 +95,9 @@ class F5XCCollector:
 
     def _initialize_cert_session(self) -> requests.Session:
         """
-        Initialize HTTP session with P12 certificate authentication.
+        Initialize HTTP session with certificate authentication.
+
+        Uses pre-extracted cert/key files if available, otherwise extracts from P12.
 
         Returns:
             Configured requests Session
@@ -90,8 +106,25 @@ class F5XCCollector:
             AuthenticationError: If certificate processing fails
         """
         try:
-            # Extract cert and key from P12 file
-            cert_path, key_path = self._extract_p12_certificate()
+            # Use pre-extracted cert/key if provided, otherwise extract from P12
+            if hasattr(self, "cert_path") and hasattr(self, "key_path"):
+                cert_path = self.cert_path
+                key_path = self.key_path
+                logger.info(
+                    "Using provided certificate and key files", cert=cert_path, key=key_path
+                )
+            else:
+                # Extract cert and key from P12 file
+                cert_path, key_path = self._extract_p12_certificate()
+                logger.info("Extracted certificate and key from P12 file")
+
+            # Verify files exist
+            from pathlib import Path
+
+            if not Path(cert_path).exists():
+                raise AuthenticationError(f"Certificate file not found: {cert_path}")
+            if not Path(key_path).exists():
+                raise AuthenticationError(f"Key file not found: {key_path}")
 
             session = create_http_session_with_retries()
             session.cert = (cert_path, key_path)
@@ -100,8 +133,10 @@ class F5XCCollector:
             return session
 
         except Exception as e:
-            logger.error("Failed to initialize P12 certificate", error=str(e))
-            raise AuthenticationError(f"P12 certificate initialization failed: {e}") from e
+            logger.error("Failed to initialize certificate authentication", error=str(e))
+            raise AuthenticationError(
+                f"Certificate authentication initialization failed: {e}"
+            ) from e
 
     def _extract_p12_certificate(self) -> tuple[str, str]:
         """
@@ -121,7 +156,7 @@ class F5XCCollector:
             cert_path = temp_dir / "f5xc_cert.pem"
             key_path = temp_dir / "f5xc_key.pem"
 
-            # Extract certificate
+            # Extract certificate (with legacy provider for OpenSSL 3.x compatibility)
             subprocess.run(
                 [
                     "openssl",
@@ -134,13 +169,14 @@ class F5XCCollector:
                     str(cert_path),
                     "-passin",
                     f"pass:{self.p12_password or ''}",
+                    "-legacy",  # Support legacy algorithms like RC2-40-CBC
                 ],
                 check=True,
                 capture_output=True,
                 text=True,
             )
 
-            # Extract private key
+            # Extract private key (with legacy provider for OpenSSL 3.x compatibility)
             subprocess.run(
                 [
                     "openssl",
@@ -153,6 +189,7 @@ class F5XCCollector:
                     str(key_path),
                     "-passin",
                     f"pass:{self.p12_password or ''}",
+                    "-legacy",  # Support legacy algorithms like RC2-40-CBC
                 ],
                 check=True,
                 capture_output=True,
@@ -164,15 +201,17 @@ class F5XCCollector:
 
         except subprocess.CalledProcessError as e:
             raise AuthenticationError(f"Failed to extract P12 certificate: {e.stderr}") from e
-        except FileNotFoundError:
-            raise AuthenticationError("openssl command not found - ensure OpenSSL is installed")
+        except FileNotFoundError as e:
+            raise AuthenticationError(
+                "openssl command not found - ensure OpenSSL is installed"
+            ) from e
 
-    def _make_request(self, endpoint: str, namespace: str = "system") -> Dict:
+    def _make_request(self, endpoint: str, namespace: str = "system") -> dict:
         """
         Make authenticated request to F5 XC API.
 
         Args:
-            endpoint: API endpoint path
+            endpoint: API endpoint path (may contain {namespace} placeholder)
             namespace: F5 XC namespace (default: system)
 
         Returns:
@@ -181,6 +220,8 @@ class F5XCCollector:
         Raises:
             F5XCAPIError: If API request fails
         """
+        # Replace {namespace} placeholder in endpoint with actual namespace value
+        endpoint = endpoint.replace("{namespace}", namespace)
         url = f"{self.base_url}/{endpoint}"
         params = {"namespace": namespace}
 
@@ -197,7 +238,7 @@ class F5XCCollector:
             logger.error("F5 XC API request error", error=str(e))
             raise F5XCAPIError(f"F5 XC API request error: {e}") from e
 
-    def collect_resources(self, namespace: str = "system") -> List[F5XCResource]:
+    def collect_resources(self, namespace: str = "system") -> list[F5XCResource]:
         """
         Collect all F5 XC resources from multiple resource types.
 
@@ -234,7 +275,7 @@ class F5XCCollector:
             logger.error("Failed to collect F5 XC resources", error=str(e))
             raise F5XCAPIError(f"Failed to collect F5 XC resources: {e}") from e
 
-    def collect_http_loadbalancers(self, namespace: str = "system") -> List[F5XCResource]:
+    def collect_http_loadbalancers(self, namespace: str = "system") -> list[F5XCResource]:
         """
         Collect HTTP load balancers.
 
@@ -273,7 +314,7 @@ class F5XCCollector:
             logger.warning("Failed to collect HTTP load balancers", error=str(e))
             return []
 
-    def collect_origin_pools(self, namespace: str = "system") -> List[F5XCResource]:
+    def collect_origin_pools(self, namespace: str = "system") -> list[F5XCResource]:
         """
         Collect origin pools.
 
@@ -310,7 +351,7 @@ class F5XCCollector:
             logger.warning("Failed to collect origin pools", error=str(e))
             return []
 
-    def collect_virtual_sites(self, namespace: str = "system") -> List[F5XCResource]:
+    def collect_virtual_sites(self, namespace: str = "system") -> list[F5XCResource]:
         """
         Collect virtual sites.
 
@@ -347,7 +388,7 @@ class F5XCCollector:
             logger.warning("Failed to collect virtual sites", error=str(e))
             return []
 
-    def collect_sites(self) -> List[F5XCResource]:
+    def collect_sites(self) -> list[F5XCResource]:
         """
         Collect sites (physical or edge sites).
 

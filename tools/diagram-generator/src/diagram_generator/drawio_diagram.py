@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Optional
 from xml.dom import minidom
 
+from diagram_generator.azure_icons import get_azure_icon_converter
 from diagram_generator.exceptions import DiagramGenerationError
 from diagram_generator.models import CorrelatedResources, DrawioDocument, ResourceSource
 from diagram_generator.utils import format_resource_label, get_logger, get_resource_short_name
@@ -57,21 +58,23 @@ class DrawioDiagramGenerator:
         "internet_cloud": "ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#5D9CEC;strokeColor=#FFFFFF;strokeWidth=2;fontColor=#FFFFFF;fontSize=14;fontStyle=1;",
         "onpremises_building": "rounded=0;whiteSpace=wrap;html=1;fillColor=#0078D4;strokeColor=#005A9E;strokeWidth=2;fontSize=10;fontColor=#FFFFFF;",  # Simple building rectangle
         "route_table": "rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1;fontSize=9;align=left;verticalAlign=top;",
-        "sequence_number": "ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#107C10;strokeColor=#FFFFFF;strokeWidth=2;fontColor=#FFFFFF;fontSize=12;fontStyle=1;",
+        "sequence_number": "ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#107C10;strokeColor=#FFFFFF;strokeWidth=3;fontColor=#FFFFFF;fontSize=14;fontStyle=1;shadow=1;",
         "f5xc_site": "shape=cloud;fillColor=#50C878;strokeColor=#2E7D54;strokeWidth=2;",
         "default": "rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F4F8;strokeColor=#0078D4;strokeWidth=1;",
     }
 
     # Traffic flow arrow styles (matching Microsoft Learn)
+    # Using official Azure brand colors: #0078D4 (Azure Blue), #107C10 (Success Green)
+    # Thick 6px arrows for high visibility matching Microsoft Learn diagrams
     TRAFFIC_FLOW_STYLES = {
-        "inbound": "endArrow=classic;html=1;strokeColor=#4472C4;strokeWidth=3;",  # Inbound traffic (blue)
-        "return": "endArrow=classic;html=1;strokeColor=#70AD47;strokeWidth=3;",  # Return traffic (green)
-        "north_south": "endArrow=classic;html=1;strokeColor=#4472C4;strokeWidth=3;",  # Internet traffic (blue)
-        "east_west": "endArrow=classic;html=1;strokeColor=#70AD47;strokeWidth=3;",  # Internal traffic (green)
-        "peering": "endArrow=classic;html=1;strokeColor=#666666;strokeWidth=2;dashed=1;",  # VNet peering
-        "gateway_connection": "endArrow=classic;html=1;strokeColor=#4472C4;strokeWidth=3;",  # Gateway traffic
-        "nva_traffic": "endArrow=classic;html=1;strokeColor=#70AD47;strokeWidth=3;",  # Through NVA
-        "dependency": "endArrow=classic;html=1;strokeColor=#666666;strokeWidth=2;dashed=1;",  # Generic dependency
+        "inbound": "endArrow=classic;html=1;strokeColor=#0078D4;strokeWidth=6;",  # Inbound traffic (Azure blue)
+        "return": "endArrow=classic;html=1;strokeColor=#107C10;strokeWidth=6;",  # Return traffic (success green)
+        "north_south": "endArrow=classic;html=1;strokeColor=#0078D4;strokeWidth=6;",  # Internet traffic (Azure blue)
+        "east_west": "endArrow=classic;html=1;strokeColor=#107C10;strokeWidth=6;",  # Internal traffic (success green)
+        "peering": "endArrow=classic;html=1;strokeColor=#666666;strokeWidth=4;dashed=1;",  # VNet peering (thicker)
+        "gateway_connection": "endArrow=classic;html=1;strokeColor=#0078D4;strokeWidth=6;",  # Gateway traffic (Azure blue)
+        "nva_traffic": "endArrow=classic;html=1;strokeColor=#107C10;strokeWidth=6;",  # Through NVA (success green)
+        "dependency": "endArrow=classic;html=1;strokeColor=#666666;strokeWidth=4;dashed=1;",  # Generic dependency (thicker)
     }
 
     def __init__(
@@ -94,6 +97,9 @@ class DrawioDiagramGenerator:
         self.auto_layout = auto_layout
         self.group_by_platform = group_by_platform
         self.output_dir = output_dir or Path.cwd()
+
+        # Initialize Azure icon converter
+        self.icon_converter = get_azure_icon_converter()
 
         # Layout configuration
         self.layout = {
@@ -148,18 +154,18 @@ class DrawioDiagramGenerator:
             # Save to file
             output_file = self._save_diagram(diagram_xml)
 
-            # Export to PNG
-            png_file = self._export_to_png(output_file)
+            # Export to SVG (properly renders embedded base64 SVG icons)
+            svg_file = self._export_to_svg(output_file)
 
             logger.info(
                 "Draw.io diagram generated successfully",
                 file_path=str(output_file),
-                image_file_path=str(png_file),
+                image_file_path=str(svg_file),
             )
 
             return DrawioDocument(
                 file_path=output_file,
-                image_file_path=png_file,
+                image_file_path=svg_file,
                 title=self.title,
             )
 
@@ -455,22 +461,8 @@ class DrawioDiagramGenerator:
                 resource_y = 35  # Lower starting position for better spacing
                 architectural_resources = temp_architectural_resources
 
-                for resource in architectural_resources:
-                    resource_label = self._format_resource_detail(resource)
-
-                    # Skip resources that return empty labels (filtered out by _get_resource_role_label)
-                    if not resource_label or resource_label.strip() == "":
-                        continue
-
-                    # Skip network infrastructure resources that clutter the diagram
-                    resource_type = resource.get("type", "").lower()
-                    if any(
-                        skip in resource_type
-                        for skip in ["networkinterface", "publicipaddress", "disk", "identity"]
-                    ):
-                        continue
-
-                    architectural_resources.append(resource)
+                # Note: architectural_resources was already filtered in lines 400-412
+                # This loop should NOT append to the list - just process existing items
 
                 # Place architectural resources with better spacing
                 for resource in architectural_resources:
@@ -893,7 +885,8 @@ class DrawioDiagramGenerator:
                 style = self.TRAFFIC_FLOW_STYLES["dependency"]
                 label = relationship.metadata.get("label", str(relationship.relationship_type))
 
-            ET.SubElement(
+            # Create edge cell
+            edge_cell = ET.SubElement(
                 root,
                 "mxCell",
                 id=str(cell_id),
@@ -905,11 +898,30 @@ class DrawioDiagramGenerator:
                 target=target_id,
             )
 
-            ET.SubElement(
-                root[-1],
+            # Create geometry with explicit points for arrow visibility
+            geometry = ET.SubElement(
+                edge_cell,
                 "mxGeometry",
                 relative="1",
                 attrib={"as": "geometry"},
+            )
+
+            # Add source and target points (relative to shape centers)
+            # These ensure Draw.io renders the arrows correctly
+            ET.SubElement(
+                geometry,
+                "mxPoint",
+                x="0",
+                y="0",
+                attrib={"as": "sourcePoint"},
+            )
+
+            ET.SubElement(
+                geometry,
+                "mxPoint",
+                x="0",
+                y="0",
+                attrib={"as": "targetPoint"},
             )
 
             cell_id += 1
@@ -929,10 +941,46 @@ class DrawioDiagramGenerator:
             return self.AZURE_SHAPE_STYLES["default"]
 
     def _get_azure_resource_style(self, resource: Any) -> str:
-        """Get Azure-specific resource style with proper Azure shapes."""
-        resource_type = get_resource_short_name(resource.get("type", "")).lower()
+        """Get Azure-specific resource style with proper Azure shapes and icons."""
+        # Extract resource type directly from the resource (not using get_resource_short_name which returns name)
+        full_resource_type = resource.get("type", "").lower()
 
-        # Map resource types to Azure shapes
+        # Extract the short type name from full Azure resource type
+        # Example: "microsoft.compute/virtualmachines" -> "virtualmachines"
+        if "/" in full_resource_type:
+            resource_type = full_resource_type.split("/")[-1]
+        else:
+            resource_type = full_resource_type
+
+        # Icon type mapping (maps short Azure type names to icon keys)
+        icon_type_map = {
+            "virtualmachines": "virtual_machine",
+            "vm": "vm",
+            "loadbalancers": "load_balancer",
+            "lb": "lb",
+            "virtualnetworkgateways": "virtual_network_gateway",
+            "gateway": "virtual_network_gateway",
+            "networksecuritygroups": "network_security_group",
+            "nsg": "nsg",
+            "networkinterfaces": "network_interface",
+            "nic": "nic",
+            "publicipaddresses": "public_ip",
+            "pip": "public_ip",
+            "routetables": "route_table",
+        }
+
+        # Find matching icon type
+        icon_resource_type = icon_type_map.get(resource_type)
+
+        # Try to use Azure icon if available
+        if icon_resource_type:
+            icon_data = self.icon_converter.get_icon_for_resource(icon_resource_type)
+            if icon_data:
+                logger.debug(f"Using Azure icon for {resource_type}: {icon_data['icon_path']}")
+                return icon_data["style"]
+
+        # Fallback to geometric shapes if icon not available
+        logger.debug(f"No icon available for {resource_type}, using geometric shapes")
         if "virtualmachine" in resource_type or "vm" in resource_type:
             return self.AZURE_SHAPE_STYLES["vm"]
         elif "loadbalancer" in resource_type or "_lb" in resource_type:
@@ -1177,14 +1225,25 @@ class DrawioDiagramGenerator:
                     }
 
         # Second pass: assign resources to subnets
-        for resource in resources:
+        logger.debug(f"Starting second pass: assigning {len(resources)} resources to subnets")
+        for idx, resource in enumerate(resources, 1):
+            logger.debug(f"=== LOOP ITERATION {idx}/{len(resources)} START ===")
+            logger.debug(f"Resource object type: {type(resource)}")
+            logger.debug(
+                f"Resource keys: {list(resource.keys()) if isinstance(resource, dict) else 'NOT A DICT'}"
+            )
+
             resource_type = resource.get("type", "").lower()
+            resource_name = resource.get("name", "").lower()
+            logger.debug(
+                f"Processing resource {idx}/{len(resources)}: {resource_name} (type: {resource_type})"
+            )
 
             # Skip VNets and subnets themselves
             if "virtualnetwork" in resource_type or "subnet" in resource_type:
+                logger.debug(f"Skipping VNet/subnet resource: {resource_name}")
                 continue
 
-            resource_name = resource.get("name", "").lower()
             values = resource.get("values", {})
             properties = resource.get("properties", {})
 
@@ -1273,6 +1332,7 @@ class DrawioDiagramGenerator:
             if not subnet_id and (
                 "networksecuritygroup" in resource_type or "nsg" in resource_type
             ):
+                logger.debug(f"NSG {resource_name}: attempting naming-based subnet matching")
                 # NSG naming: "hub-vnet-mgmt-nsg" -> hub-vnet, mgmt subnet
                 # or "f5-xc-ce-spoke-vnet-workload-nsg" -> f5-xc-ce-spoke-vnet, workload subnet
 
@@ -1285,8 +1345,15 @@ class DrawioDiagramGenerator:
                     "wl": "workload",
                 }
 
-                for vnet_name in vnets:
+                vnet_count = len(vnets)
+                logger.debug(f"NSG {resource_name}: checking {vnet_count} VNets for match")
+
+                for vnet_idx, vnet_name in enumerate(vnets, 1):
                     vnet_lower = vnet_name.lower()
+                    logger.debug(
+                        f"NSG {resource_name}: checking VNet {vnet_idx}/{vnet_count}: {vnet_name}"
+                    )
+
                     # Check if resource name starts with vnet name
                     if resource_name.startswith(vnet_lower):
                         # Extract subnet hint from remaining name
@@ -1297,9 +1364,23 @@ class DrawioDiagramGenerator:
                         # Expand abbreviations
                         expanded = abbrev_map.get(remaining, remaining)
 
+                        logger.debug(
+                            f"NSG {resource_name}: matched VNet prefix {vnet_name}, "
+                            f"remaining='{remaining}', expanded='{expanded}'"
+                        )
+
                         # Match against subnet names
-                        for subnet_name in vnets[vnet_name]["subnets"]:
+                        subnet_count = len(vnets[vnet_name]["subnets"])
+                        logger.debug(
+                            f"NSG {resource_name}: checking {subnet_count} subnets in VNet {vnet_name}"
+                        )
+
+                        for subnet_idx, subnet_name in enumerate(vnets[vnet_name]["subnets"], 1):
                             subnet_lower = subnet_name.lower()
+                            logger.debug(
+                                f"NSG {resource_name}: checking subnet {subnet_idx}/{subnet_count}: {subnet_name}"
+                            )
+
                             # Check multiple matching strategies
                             if (
                                 remaining in subnet_lower
@@ -1308,33 +1389,110 @@ class DrawioDiagramGenerator:
                                 or subnet_lower.endswith(expanded)
                             ):
                                 subnet_id = f"nsg_match_{vnet_name}_{subnet_name}"
+                                logger.debug(
+                                    f"NSG {resource_name}: matched to subnet {subnet_name} in VNet {vnet_name}"
+                                )
                                 break
                         if subnet_id:
+                            logger.debug(
+                                f"NSG {resource_name}: successfully matched, breaking VNet loop"
+                            )
                             break
+                    else:
+                        logger.debug(
+                            f"NSG {resource_name}: does not start with VNet prefix {vnet_name}"
+                        )
+
+                if not subnet_id:
+                    logger.debug(f"NSG {resource_name}: no naming-based match found")
 
             # Special handling for route tables - use naming convention
             if not subnet_id and ("routetable" in resource_type or "route_table" in resource_type):
+                logger.debug(
+                    f"Route table {resource_name}: attempting naming-based subnet matching"
+                )
                 # Route table naming: "hub-vnet-rt" -> hub-vnet
                 # or "f5-xc-ce-spoke-vnet-rt" -> f5-xc-ce-spoke-vnet
-                for vnet_name in vnets:
+
+                vnet_count = len(vnets)
+                logger.debug(f"Route table {resource_name}: checking {vnet_count} VNets for match")
+
+                for vnet_idx, vnet_name in enumerate(vnets, 1):
                     vnet_lower = vnet_name.lower()
+                    logger.debug(
+                        f"Route table {resource_name}: checking VNet {vnet_idx}/{vnet_count}: {vnet_name}"
+                    )
+
                     if vnet_lower in resource_name:
+                        logger.debug(
+                            f"Route table {resource_name}: matched VNet {vnet_name} in name"
+                        )
+
                         # Assign to first non-gateway subnet in this vnet (typically default or workload)
-                        for subnet_name in vnets[vnet_name]["subnets"]:
+                        subnet_count = len(vnets[vnet_name]["subnets"])
+                        logger.debug(
+                            f"Route table {resource_name}: checking {subnet_count} subnets in VNet {vnet_name}"
+                        )
+
+                        for subnet_idx, subnet_name in enumerate(vnets[vnet_name]["subnets"], 1):
+                            logger.debug(
+                                f"Route table {resource_name}: checking subnet {subnet_idx}/{subnet_count}: {subnet_name}"
+                            )
+
                             if "gateway" not in subnet_name.lower():
                                 subnet_id = f"rt_match_{vnet_name}_{subnet_name}"
+                                logger.debug(
+                                    f"Route table {resource_name}: matched to non-gateway subnet {subnet_name}"
+                                )
                                 break
                         if subnet_id:
+                            logger.debug(
+                                f"Route table {resource_name}: successfully matched, breaking VNet loop"
+                            )
                             break
+                    else:
+                        logger.debug(
+                            f"Route table {resource_name}: VNet name {vnet_name} not found in resource name"
+                        )
+
+                if not subnet_id:
+                    logger.debug(f"Route table {resource_name}: no naming-based match found")
 
             # Try to match to a subnet
             assigned = False
-            for vnet_name, vnet_data in vnets.items():
-                for subnet_name, subnet_data in vnet_data["subnets"].items():
-                    # Match by subnet ID (exact or contained)
-                    if subnet_id:
+            if subnet_id:
+                logger.debug(
+                    f"Resource {resource_name}: attempting subnet assignment with subnet_id={subnet_id}"
+                )
+
+                vnet_count = len(vnets)
+                logger.debug(
+                    f"Resource {resource_name}: checking {vnet_count} VNets for subnet assignment"
+                )
+
+                for vnet_idx, (vnet_name, vnet_data) in enumerate(vnets.items(), 1):
+                    logger.debug(
+                        f"Resource {resource_name}: checking VNet {vnet_idx}/{vnet_count}: {vnet_name}"
+                    )
+
+                    subnet_count = len(vnet_data["subnets"])
+                    logger.debug(
+                        f"Resource {resource_name}: checking {subnet_count} subnets in VNet {vnet_name}"
+                    )
+
+                    for subnet_idx, (subnet_name, subnet_data) in enumerate(
+                        vnet_data["subnets"].items(), 1
+                    ):
+                        logger.debug(
+                            f"Resource {resource_name}: checking subnet {subnet_idx}/{subnet_count}: {subnet_name}"
+                        )
+
+                        # Match by subnet ID (exact or contained)
                         # Check for exact match or if subnet ID is contained in resource's subnet_id (for Azure full paths)
                         if subnet_id == subnet_data["id"] or subnet_data["id"] in subnet_id:
+                            logger.debug(
+                                f"Resource {resource_name}: matched to subnet {subnet_name} (exact/contained match)"
+                            )
                             subnet_data["resources"].append(resource)
                             assigned = True
                             break
@@ -1346,15 +1504,34 @@ class DrawioDiagramGenerator:
                             if len(parts) >= 4:
                                 matched_vnet = parts[2]
                                 matched_subnet = "_".join(parts[3:])
+                                logger.debug(
+                                    f"Resource {resource_name}: checking naming match "
+                                    f"vnet={matched_vnet}, subnet={matched_subnet}"
+                                )
+
                                 if vnet_name == matched_vnet and subnet_name == matched_subnet:
+                                    logger.debug(
+                                        f"Resource {resource_name}: matched to subnet {subnet_name} (naming match)"
+                                    )
                                     subnet_data["resources"].append(resource)
                                     assigned = True
                                     break
-                if assigned:
-                    break
+                    if assigned:
+                        logger.debug(
+                            f"Resource {resource_name}: successfully assigned, breaking VNet loop"
+                        )
+                        break
+
+                if not assigned:
+                    logger.debug(
+                        f"Resource {resource_name}: no subnet assignment match found with subnet_id"
+                    )
+            else:
+                logger.debug(f"Resource {resource_name}: no subnet_id, skipping subnet assignment")
 
             # If not assigned to any subnet, try to infer VNet from resource name before fallback
             if not assigned and vnets:
+                logger.debug(f"Resource {resource_name}: not assigned, attempting VNet inference")
                 # Try to infer VNet from resource naming pattern
                 inferred_vnet = None
                 for vnet_name in vnets:
@@ -1362,10 +1539,12 @@ class DrawioDiagramGenerator:
                     # Check if VNet name is part of resource name
                     if vnet_lower in resource_name:
                         inferred_vnet = vnet_name
+                        logger.debug(f"Resource {resource_name}: inferred VNet={vnet_name}")
                         break
 
                 # Use inferred VNet if found, otherwise use first VNet
                 default_vnet = inferred_vnet if inferred_vnet else list(vnets.keys())[0]
+                logger.debug(f"Resource {resource_name}: using default VNet={default_vnet}")
 
                 if "default-subnet" not in vnets[default_vnet]["subnets"]:
                     vnets[default_vnet]["subnets"]["default-subnet"] = {
@@ -1374,7 +1553,13 @@ class DrawioDiagramGenerator:
                         "resources": [],
                     }
                 vnets[default_vnet]["subnets"]["default-subnet"]["resources"].append(resource)
+                logger.debug(
+                    f"Resource {resource_name}: assigned to default-subnet in {default_vnet}"
+                )
 
+            logger.debug(f"=== LOOP ITERATION {idx}/{len(resources)} END ===")
+
+        logger.debug("Second pass complete: all resources assigned to subnets")
         return vnets
 
     def _group_resources_by_platform(self, resources: list[Any]) -> dict[str, list[Any]]:
@@ -1495,7 +1680,7 @@ class DrawioDiagramGenerator:
             "mxCell",
             id=inbound_label_id,
             value="━━━━ Inbound traffic",
-            style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#4472C4;fontStyle=1;",
+            style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#0078D4;fontStyle=1;",
             vertex="1",
             parent="1",
         )
@@ -1519,7 +1704,7 @@ class DrawioDiagramGenerator:
             "mxCell",
             id=return_label_id,
             value="━━━━ Return traffic",
-            style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#70AD47;fontStyle=1;",
+            style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#107C10;fontStyle=1;",
             vertex="1",
             parent="1",
         )
@@ -1603,25 +1788,28 @@ class DrawioDiagramGenerator:
         logger.info("Diagram saved to file", path=str(output_file))
         return output_file
 
-    def _export_to_png(self, drawio_file: Path) -> Path:
+    def _export_to_svg(self, drawio_file: Path) -> Path:
         """
-        Export .drawio file to PNG using drawio CLI.
+        Export .drawio file to SVG using drawio CLI.
+
+        SVG format properly renders embedded base64 SVG icons,
+        unlike PNG export which has limitations with embedded images.
 
         Args:
             drawio_file: Path to the .drawio file to export
 
         Returns:
-            Path to the exported PNG file
+            Path to the exported SVG file
 
         Raises:
-            DiagramGenerationError: If PNG export fails
+            DiagramGenerationError: If SVG export fails
         """
-        png_file = drawio_file.with_suffix(".png")
+        svg_file = drawio_file.with_suffix(".svg")
 
         try:
-            # Use drawio CLI to export PNG
+            # Use drawio CLI to export SVG
             # --export: export mode
-            # --format png: output format
+            # --format svg: output format (preserves embedded SVG icons)
             # --transparent: transparent background
             # --border 10: add border around diagram
             # --crop: crop to diagram size
@@ -1630,13 +1818,13 @@ class DrawioDiagramGenerator:
                     "drawio",
                     "--export",
                     "--format",
-                    "png",
+                    "svg",
                     "--transparent",
                     "--border",
                     "10",
                     "--crop",
                     "--output",
-                    str(png_file),
+                    str(svg_file),
                     str(drawio_file),
                 ],
                 capture_output=True,
@@ -1644,11 +1832,11 @@ class DrawioDiagramGenerator:
                 check=True,
             )
 
-            logger.info("PNG export successful", png_file=str(png_file))
-            return png_file
+            logger.info("SVG export successful", svg_file=str(svg_file))
+            return svg_file
 
         except subprocess.CalledProcessError as e:
-            error_msg = f"PNG export failed: {e.stderr}"
+            error_msg = f"SVG export failed: {e.stderr}"
             logger.error(error_msg, returncode=e.returncode)
             raise DiagramGenerationError(error_msg) from e
         except FileNotFoundError:

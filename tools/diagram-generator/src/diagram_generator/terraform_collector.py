@@ -7,7 +7,7 @@ Extracts resources and dependencies from Terraform state files.
 import json
 import subprocess
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from diagram_generator.exceptions import TerraformStateError
 from diagram_generator.models import TerraformResource
@@ -30,7 +30,7 @@ class TerraformStateCollector:
         logger.info("Terraform collector initialized", path=str(self.state_path))
 
     @retry_on_exception(max_attempts=2, delay=1.0, exceptions=(subprocess.SubprocessError,))
-    def collect_resources(self) -> List[TerraformResource]:
+    def collect_resources(self) -> list[TerraformResource]:
         """
         Collect all Terraform resources from state.
 
@@ -51,6 +51,45 @@ class TerraformStateCollector:
         except Exception as e:
             logger.error("Failed to collect Terraform resources", error=str(e))
             raise TerraformStateError(f"Failed to collect Terraform state: {e}") from e
+
+    def extract_resource_groups(self) -> list[str]:
+        """
+        Extract Azure resource group names from Terraform state.
+
+        Returns:
+            List of resource group names defined in Terraform
+
+        Raises:
+            TerraformStateError: If state cannot be read
+        """
+        logger.info("Extracting resource groups from Terraform state")
+
+        try:
+            resources = self.collect_resources()
+            resource_groups = []
+
+            for resource in resources:
+                if resource.type == "azurerm_resource_group":
+                    rg_name = resource.values.get("name")
+                    if rg_name:
+                        resource_groups.append(rg_name)
+                        logger.debug(
+                            "Found resource group in Terraform",
+                            resource_group=rg_name,
+                            address=resource.address,
+                        )
+
+            if not resource_groups:
+                logger.warning("No azurerm_resource_group resources found in Terraform state")
+
+            logger.info(
+                "Resource groups extracted", count=len(resource_groups), names=resource_groups
+            )
+            return resource_groups
+
+        except Exception as e:
+            logger.error("Failed to extract resource groups", error=str(e))
+            raise TerraformStateError(f"Failed to extract resource groups: {e}") from e
 
     def _get_terraform_state(self) -> dict:
         """
@@ -77,12 +116,12 @@ class TerraformStateCollector:
             raise TerraformStateError(f"terraform show command failed: {e.stderr}") from e
         except json.JSONDecodeError as e:
             raise TerraformStateError(f"Invalid JSON in Terraform state: {e}") from e
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             raise TerraformStateError(
                 "terraform command not found - ensure Terraform CLI is installed"
-            )
+            ) from e
 
-    def _parse_resources(self, state_data: dict) -> List[TerraformResource]:
+    def _parse_resources(self, state_data: dict) -> list[TerraformResource]:
         """
         Parse resources from Terraform state JSON.
 

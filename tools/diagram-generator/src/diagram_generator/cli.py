@@ -37,8 +37,8 @@ logger = get_logger(__name__)
 @click.option(
     "--azure-subscription",
     envvar="AZURE_SUBSCRIPTION_ID",
-    required=True,
-    help="Azure subscription ID",
+    required=False,  # Allow environment variable to satisfy requirement
+    help="Azure subscription ID (can be set via AZURE_SUBSCRIPTION_ID env var)",
 )
 @click.option(
     "--azure-auth",
@@ -49,30 +49,42 @@ logger = get_logger(__name__)
 @click.option(
     "--f5xc-tenant",
     envvar="F5XC_TENANT",
-    required=True,
-    help="F5 XC tenant name",
+    required=False,  # Allow environment variable to satisfy requirement
+    help="F5 XC tenant name (can be set via F5XC_TENANT or TF_VAR_f5_xc_tenant env var)",
 )
 @click.option(
     "--f5xc-auth",
-    type=click.Choice(["api_token", "p12_certificate"]),
-    default="api_token",
+    type=click.Choice(["api_token", "certificate", "p12_certificate"]),
+    default="p12_certificate",  # Default to P12 (matches setup-backend.sh)
     help="F5 XC authentication method",
 )
 @click.option(
     "--f5xc-api-token",
     envvar="F5XC_API_TOKEN",
-    help="F5 XC API token (required if using api_token auth)",
+    help="F5 XC API token (can be set via F5XC_API_TOKEN or VOLT_API_KEY env var)",
 )
 @click.option(
     "--f5xc-p12-path",
     type=click.Path(exists=True, path_type=Path),
     envvar="F5XC_P12_CERT_PATH",
-    help="Path to F5 XC P12 certificate (required if using p12_certificate auth)",
+    help="Path to F5 XC P12 certificate (can be set via F5XC_P12_CERT_PATH env var)",
 )
 @click.option(
     "--f5xc-p12-password",
-    envvar="F5XC_P12_PASSWORD",
-    help="F5 XC P12 certificate password",
+    envvar="VES_P12_PASSWORD",  # Match setup-backend.sh environment variable
+    help="F5 XC P12 certificate password (can be set via VES_P12_PASSWORD env var)",
+)
+@click.option(
+    "--f5xc-cert-path",
+    type=click.Path(exists=True, path_type=Path),
+    envvar="F5XC_CERT_PATH",
+    help="Path to F5 XC certificate file (alternative to P12)",
+)
+@click.option(
+    "--f5xc-key-path",
+    type=click.Path(exists=True, path_type=Path),
+    envvar="F5XC_KEY_PATH",
+    help="Path to F5 XC key file (alternative to P12)",
 )
 @click.option(
     "--diagram-title",
@@ -115,6 +127,8 @@ def main(
     f5xc_api_token: Optional[str],
     f5xc_p12_path: Optional[Path],
     f5xc_p12_password: Optional[str],
+    f5xc_cert_path: Optional[Path],
+    f5xc_key_path: Optional[Path],
     diagram_title: str,
     output_dir: Optional[Path],
     no_auto_layout: bool,
@@ -127,9 +141,60 @@ def main(
 
     Collects resources from Terraform state, Azure Resource Graph, and F5 XC API,
     correlates them, and generates a comprehensive infrastructure diagram in Draw.io format.
+
+    Authentication can be provided via CLI arguments or environment variables.
+    Environment variables take precedence for terraform integration.
     """
+    import os
+
     # Configure logging
     configure_logging(verbose=verbose)
+
+    # Handle environment variable fallbacks for terraform integration
+    if not azure_subscription:
+        azure_subscription = os.getenv("AZURE_SUBSCRIPTION_ID")
+        if not azure_subscription:
+            click.echo(
+                "❌ Azure subscription ID required via --azure-subscription or AZURE_SUBSCRIPTION_ID env var",
+                err=True,
+            )
+            sys.exit(1)
+
+    if not f5xc_tenant:
+        # Try both F5XC_TENANT and TF_VAR_F5_XC_TENANT (terraform variable)
+        f5xc_tenant = os.getenv("F5XC_TENANT") or os.getenv("TF_VAR_F5_XC_TENANT")
+        if not f5xc_tenant:
+            click.echo(
+                "❌ F5 XC tenant required via --f5xc-tenant or F5XC_TENANT/TF_VAR_F5_XC_TENANT env var",
+                err=True,
+            )
+            sys.exit(1)
+
+    # Handle F5 XC P12 authentication from environment (setup-backend.sh pattern)
+    if f5xc_auth == "p12_certificate":
+        if not f5xc_p12_password:
+            f5xc_p12_password = os.getenv("VES_P12_PASSWORD")
+
+        # Check for P12 content in environment (base64 encoded from setup-backend.sh)
+        p12_content_env = os.getenv("VES_P12_CONTENT")
+        if p12_content_env and not f5xc_p12_path:
+            # VES_P12_CONTENT is set, we'll need to decode it to a temp file
+            import base64
+            import tempfile
+
+            logger.info("Using P12 certificate from VES_P12_CONTENT environment variable")
+            try:
+                p12_bytes = base64.b64decode(p12_content_env)
+                # Create temporary P12 file
+                temp_p12 = tempfile.NamedTemporaryFile(delete=False, suffix=".p12")
+                temp_p12.write(p12_bytes)
+                temp_p12.close()
+                f5xc_p12_path = Path(temp_p12.name)
+                logger.info(f"Extracted P12 certificate to temporary file: {f5xc_p12_path}")
+            except Exception as e:
+                logger.error(f"Failed to decode VES_P12_CONTENT: {e}")
+                click.echo(f"❌ Failed to process P12 certificate from environment: {e}", err=True)
+                sys.exit(1)
 
     logger.info(
         "Starting diagram generation",
@@ -148,6 +213,8 @@ def main(
             f5xc_api_token=f5xc_api_token,
             f5xc_p12_path=f5xc_p12_path,
             f5xc_p12_password=f5xc_p12_password,
+            f5xc_cert_path=f5xc_cert_path,
+            f5xc_key_path=f5xc_key_path,
             diagram_title=diagram_title,
             auto_layout=not no_auto_layout,
             group_by_platform=not no_grouping,
@@ -165,9 +232,19 @@ def main(
         terraform_resources = terraform_collector.collect_resources()
         click.echo(f"  ✓ Collected {len(terraform_resources)} Terraform resources")
 
+        # Extract resource groups from Terraform to scope Azure queries
+        resource_groups = terraform_collector.extract_resource_groups()
+        if resource_groups:
+            click.echo(
+                f"  ✓ Found {len(resource_groups)} resource group(s): {', '.join(resource_groups)}"
+            )
+        else:
+            click.echo("  ⚠ No resource groups found in Terraform, querying entire subscription")
+
         azure_collector = AzureResourceGraphCollector(
             subscription_id=config_data.azure_subscription_id,
             auth_method=config_data.azure_auth_method,
+            resource_groups=resource_groups,
         )
         azure_resources = azure_collector.collect_resources()
         click.echo(f"  ✓ Collected {len(azure_resources)} Azure resources")
@@ -184,6 +261,8 @@ def main(
             api_token=config_data.f5xc_api_token,
             p12_cert_path=config_data.f5xc_p12_cert_path,
             p12_password=config_data.f5xc_p12_password,
+            cert_path=str(f5xc_cert_path) if f5xc_cert_path else None,
+            key_path=str(f5xc_key_path) if f5xc_key_path else None,
         )
         f5xc_resources = f5xc_collector.collect_resources()
         click.echo(f"  ✓ Collected {len(f5xc_resources)} F5 XC resources")
@@ -256,6 +335,8 @@ def _build_config(
     f5xc_api_token: Optional[str],
     f5xc_p12_path: Optional[Path],
     f5xc_p12_password: Optional[str],
+    f5xc_cert_path: Optional[Path],
+    f5xc_key_path: Optional[Path],
     diagram_title: str,
     auto_layout: bool,
     group_by_platform: bool,
@@ -279,6 +360,8 @@ def _build_config(
         f5xc_api_token=f5xc_api_token,
         f5xc_p12_cert_path=str(f5xc_p12_path) if f5xc_p12_path else None,
         f5xc_p12_password=f5xc_p12_password,
+        f5xc_cert_path=str(f5xc_cert_path) if f5xc_cert_path else None,
+        f5xc_key_path=str(f5xc_key_path) if f5xc_key_path else None,
         diagram_title=diagram_title,
         auto_layout=auto_layout,
         group_by_platform=group_by_platform,

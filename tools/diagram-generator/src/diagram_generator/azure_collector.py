@@ -25,6 +25,7 @@ class AzureResourceGraphCollector:
         self,
         subscription_id: str,
         auth_method: AzureAuthMethod = AzureAuthMethod.AZURE_CLI,
+        resource_groups: Optional[list[str]] = None,
     ):
         """
         Initialize Azure Resource Graph collector.
@@ -32,17 +33,20 @@ class AzureResourceGraphCollector:
         Args:
             subscription_id: Azure subscription ID to query
             auth_method: Authentication method to use
+            resource_groups: Optional list of resource groups to filter queries (improves performance)
 
         Raises:
             AuthenticationError: If Azure authentication fails
         """
         self.subscription_id = subscription_id
         self.auth_method = auth_method
+        self.resource_groups = resource_groups or []
         self.client = self._initialize_client()
         logger.info(
             "Azure collector initialized",
             subscription_id=subscription_id,
             auth_method=auth_method.value,
+            resource_groups=self.resource_groups,
         )
 
     def _initialize_client(self) -> ResourceGraphClient:
@@ -120,6 +124,11 @@ class AzureResourceGraphCollector:
         """
 
         query = base_query.format(subscription_id=self.subscription_id)
+
+        # Add resource group filter if specified (improves performance)
+        if self.resource_groups:
+            rg_filter = "', '".join(self.resource_groups)
+            query += f"\n| where resourceGroup in ('{rg_filter}')"
 
         if resource_types:
             types_filter = "', '".join(resource_types)
@@ -267,6 +276,14 @@ class AzureResourceGraphCollector:
         Resources
         | where subscriptionId == '{self.subscription_id}'
         | where type == 'microsoft.network/loadbalancers'
+        """
+
+        # Add resource group filter if specified
+        if self.resource_groups:
+            rg_filter = "', '".join(self.resource_groups)
+            query += f"\n        | where resourceGroup in ('{rg_filter}')"
+
+        query += """
         | extend backendPools = properties.backendAddressPools
         | extend frontendConfigs = properties.frontendIPConfigurations
         | extend probes = properties.probes
@@ -337,6 +354,14 @@ class AzureResourceGraphCollector:
         Resources
         | where subscriptionId == '{self.subscription_id}'
         | where type == 'microsoft.network/routetables'
+        """
+
+        # Add resource group filter if specified
+        if self.resource_groups:
+            rg_filter = "', '".join(self.resource_groups)
+            query += f"\n        | where resourceGroup in ('{rg_filter}')"
+
+        query += """
         | extend routes = properties.routes
         | extend subnets = properties.subnets
         | project id, name, routes, subnets, properties
