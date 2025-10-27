@@ -767,28 +767,15 @@ class DrawioDiagramGenerator:
 
         Maps Azure resources to architectural roles rather than technical names.
         Examples: "NVA", "App server", "Gateway", "Load balancer"
+
+        Priority: Resource TYPE checks (definitive) before NAME pattern checks (heuristic)
         """
         name = resource.get("name", "").lower()
         resource_type = resource.get("type", "").lower()
 
-        # Network Virtual Appliances (F5 XC CE, firewalls, etc.)
-        if "f5" in name or "xc" in name or "ce" in name:
-            # Extract instance number if available
-            if "01" in name or "-1" in name:
-                return "NVA-1"
-            elif "02" in name or "-2" in name:
-                return "NVA-2"
-            return "NVA"
+        # === PHASE 1: Resource TYPE checks (most reliable) ===
 
-        # Gateways
-        if "gateway" in resource_type or "vpn" in name or "expressroute" in name:
-            if "vpn" in name:
-                return "VPN GW"
-            elif "expressroute" in name or "er" in name:
-                return "ExpressRoute GW"
-            return "Gateway"
-
-        # Load Balancers
+        # Load Balancers (check before NVA name patterns)
         if "loadbalancer" in resource_type or "lb" in resource_type:
             if "internal" in name or "private" in name:
                 return "Internal LB"
@@ -796,9 +783,45 @@ class DrawioDiagramGenerator:
                 return "Public LB"
             return "Load balancer"
 
-        # Virtual Machines / Compute
+        # Gateways
+        if "gateway" in resource_type:
+            if "vpn" in name:
+                return "VPN GW"
+            elif "expressroute" in name or "er" in name:
+                return "ExpressRoute GW"
+            return "Gateway"
+
+        # Network Security Groups
+        if "networksecuritygroup" in resource_type or "nsg" in resource_type:
+            if "mgmt" in name or "management" in name:
+                return "Mgmt NSG"
+            elif "workload" in name or "app" in name:
+                return "Workload NSG"
+            elif "nva" in name or "firewall" in name:
+                return "NVA NSG"
+            elif "gateway" in name:
+                return "Gateway NSG"
+            return "NSG"
+
+        # Route Tables
+        if "routetable" in resource_type or "route_table" in resource_type:
+            if "hub" in name:
+                return "Hub routes"
+            elif "spoke" in name:
+                return "Spoke routes"
+            return "Route table"
+
+        # Virtual Machines (check type first, then refine by name)
         if "virtualmachine" in resource_type or "vm" in resource_type:
-            if "app" in name or "web" in name:
+            # Check for F5 XC CE VMs specifically (NVA role)
+            if ("f5" in name and "xc" in name) or ("ce" in name and "vm" in name):
+                if "01" in name or "-1" in name:
+                    return "NVA-1"
+                elif "02" in name or "-2" in name:
+                    return "NVA-2"
+                return "NVA"
+            # General VM role detection
+            elif "app" in name or "web" in name:
                 return "App server"
             elif "db" in name or "sql" in name or "database" in name:
                 return "Database"
@@ -806,15 +829,26 @@ class DrawioDiagramGenerator:
                 return "Jumpbox"
             return "VM"
 
-        # Network resources (usually don't show these in architecture diagrams)
-        if "networkinterface" in resource_type or "publicipaddress" in resource_type:
-            return None  # Skip these - they clutter the diagram
-
         # Storage
         if "storage" in resource_type:
             return "Storage"
 
-        # Default: use short type name
+        # === PHASE 2: Infrastructure filtering (always filter these) ===
+
+        if any(
+            skip in resource_type
+            for skip in [
+                "networkinterface",
+                "publicipaddress",
+                "subnet_network_security_group_association",
+                "subnet_route_table_association",
+                "virtual_network_peering",
+            ]
+        ):
+            return None  # Skip these - they clutter the diagram
+
+        # === PHASE 3: Fallback - use short type name ===
+
         return get_resource_short_name(resource_type)
 
     def _format_resource_detail(self, resource: Any) -> str:
@@ -928,7 +962,14 @@ class DrawioDiagramGenerator:
             values = resource.get("values", {})
             properties = resource.get("properties", {})
 
+            # Extract subnet_id based on resource type
             subnet_id = values.get("subnet_id") or properties.get("subnet", {}).get("id", "")
+
+            # Special handling for load balancers - subnet is in frontend IP configuration
+            if not subnet_id and ("loadbalancer" in resource_type or "lb" in resource_type):
+                frontend_configs = values.get("frontend_ip_configuration", [])
+                if frontend_configs and isinstance(frontend_configs, list):
+                    subnet_id = frontend_configs[0].get("subnet_id", "")
 
             # Try to match to a subnet
             assigned = False
