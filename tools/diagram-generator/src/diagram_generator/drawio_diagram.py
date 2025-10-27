@@ -910,7 +910,7 @@ class DrawioDiagramGenerator:
         """
         vnets = {}
 
-        # First pass: identify VNets and subnets
+        # First pass: identify VNets and extract their subnets
         for resource in resources:
             resource_type = resource.get("type", "").lower()
 
@@ -918,19 +918,43 @@ class DrawioDiagramGenerator:
                 # This is a VNet
                 vnet_name = resource.get("name", "unnamed-vnet")
                 values = resource.get("values", {})
+                properties = resource.get("properties", {})
+
+                # Get address space from either values (Terraform) or properties (Azure)
+                address_space = ""
+                if "address_space" in values:
+                    address_space = (
+                        values["address_space"][0]
+                        if isinstance(values["address_space"], list)
+                        else values["address_space"]
+                    )
+                elif (
+                    "addressSpace" in properties and "addressPrefixes" in properties["addressSpace"]
+                ):
+                    prefixes = properties["addressSpace"]["addressPrefixes"]
+                    address_space = prefixes[0] if prefixes else ""
 
                 vnets[vnet_name] = {
                     "id": resource.get("id", vnet_name),
-                    "address_space": (
-                        values.get("address_space", [""])[0]
-                        if isinstance(values.get("address_space"), list)
-                        else values.get("address_space", "")
-                    ),
+                    "address_space": address_space,
                     "subnets": {},
                 }
 
+                # Extract subnets from VNet properties (Azure Resource Graph structure)
+                subnets_list = properties.get("subnets", [])
+                for subnet_data in subnets_list:
+                    subnet_name = subnet_data.get("name", "unnamed-subnet")
+                    subnet_properties = subnet_data.get("properties", {})
+
+                    vnets[vnet_name]["subnets"][subnet_name] = {
+                        "id": subnet_data.get("id", f"{vnet_name}/{subnet_name}"),
+                        "address_prefix": subnet_properties.get("addressPrefix", ""),
+                        "resources": [],
+                    }
+
+                # Also handle Terraform subnet resources (if present as separate resources)
             elif "subnet" in resource_type:
-                # This is a subnet
+                # This is a Terraform subnet resource
                 subnet_name = resource.get("name", "unnamed-subnet")
                 values = resource.get("values", {})
 
@@ -944,11 +968,13 @@ class DrawioDiagramGenerator:
                         "subnets": {},
                     }
 
-                vnets[vnet_name]["subnets"][subnet_name] = {
-                    "id": resource.get("id", subnet_name),
-                    "address_prefix": values.get("address_prefix", ""),
-                    "resources": [],
-                }
+                # Only add if not already present from VNet properties
+                if subnet_name not in vnets[vnet_name]["subnets"]:
+                    vnets[vnet_name]["subnets"][subnet_name] = {
+                        "id": resource.get("id", subnet_name),
+                        "address_prefix": values.get("address_prefix", ""),
+                        "resources": [],
+                    }
 
         # Second pass: assign resources to subnets
         for resource in resources:
@@ -958,7 +984,7 @@ class DrawioDiagramGenerator:
             if "virtualnetwork" in resource_type or "subnet" in resource_type:
                 continue
 
-            # Try to find which subnet this resource belongs to
+            resource_name = resource.get("name", "").lower()
             values = resource.get("values", {})
             properties = resource.get("properties", {})
 
@@ -967,24 +993,180 @@ class DrawioDiagramGenerator:
 
             # Special handling for load balancers - subnet is in frontend IP configuration
             if not subnet_id and ("loadbalancer" in resource_type or "lb" in resource_type):
+                logger.debug(
+                    f"LB {resource_name}: Attempting to extract subnet from frontendIPConfigurations"
+                )
+                # Try Terraform structure first
                 frontend_configs = values.get("frontend_ip_configuration", [])
+                logger.debug(f"LB {resource_name}: Terraform frontend_configs={frontend_configs}")
                 if frontend_configs and isinstance(frontend_configs, list):
                     subnet_id = frontend_configs[0].get("subnet_id", "")
+                    logger.debug(f"LB {resource_name}: Terraform subnet_id={subnet_id}")
+
+                # Try Azure Resource Graph structure
+                if not subnet_id:
+                    frontend_configs = properties.get("frontendIPConfigurations", [])
+                    logger.debug(
+                        f"LB {resource_name}: Azure Resource Graph frontend_configs={frontend_configs}"
+                    )
+                    if frontend_configs and isinstance(frontend_configs, list):
+                        # Azure Resource Graph structure: frontendIPConfigurations[0].properties.subnet.id
+                        frontend_props = frontend_configs[0].get("properties", {})
+                        subnet_ref = frontend_props.get("subnet", {})
+                        subnet_id = subnet_ref.get("id", "") if isinstance(subnet_ref, dict) else ""
+                        logger.debug(
+                            f"LB {resource_name}: Azure Resource Graph subnet_id={subnet_id}"
+                        )
+
+            # Special handling for VMs - subnet is in network interface
+            if not subnet_id and ("virtualmachine" in resource_type or "vm" in resource_type):
+                # Get NIC ID from VM properties
+                network_profile = properties.get("networkProfile", {})
+                nic_refs = network_profile.get("networkInterfaces", [])
+                logger.debug(
+                    f"VM {resource_name}: network_profile={network_profile}, nic_refs={nic_refs}"
+                )
+
+                if nic_refs and isinstance(nic_refs, list):
+                    # NIC ref can be either a dict with 'id' key or a string ID directly
+                    nic_ref = nic_refs[0]
+                    nic_id = nic_ref.get("id", "") if isinstance(nic_ref, dict) else nic_ref
+                    logger.debug(f"VM {resource_name}: extracted nic_id={nic_id}")
+
+                    if nic_id:
+                        # Find the NIC resource and extract its subnet
+                        nic_found = False
+                        for nic_resource in resources:
+                            nic_resource_id = nic_resource.get("id", "")
+                            # Match full ID or check if NIC ID is contained in resource ID
+                            if (
+                                nic_resource_id == nic_id
+                                or nic_id in nic_resource_id
+                                or nic_resource_id in nic_id
+                            ):
+                                logger.debug(
+                                    f"VM {resource_name}: found matching NIC {nic_resource_id}"
+                                )
+                                nic_found = True
+                                nic_properties = nic_resource.get("properties", {})
+                                ip_configs = nic_properties.get("ipConfigurations", [])
+                                logger.debug(f"VM {resource_name}: NIC ip_configs={ip_configs}")
+                                if ip_configs and isinstance(ip_configs, list):
+                                    # Azure Resource Graph structure: ipConfigurations[0].properties.subnet.id
+                                    ip_config_props = ip_configs[0].get("properties", {})
+                                    subnet_ref = ip_config_props.get("subnet", {})
+                                    subnet_id = (
+                                        subnet_ref.get("id", "")
+                                        if isinstance(subnet_ref, dict)
+                                        else ""
+                                    )
+                                    logger.debug(
+                                        f"VM {resource_name}: extracted subnet_id={subnet_id} from NIC"
+                                    )
+                                    break
+                        if not nic_found:
+                            logger.warning(
+                                f"VM {resource_name}: NIC {nic_id} not found in resources list"
+                            )
+
+            # Special handling for NSGs - use naming convention to match subnet
+            if not subnet_id and (
+                "networksecuritygroup" in resource_type or "nsg" in resource_type
+            ):
+                # NSG naming: "hub-vnet-mgmt-nsg" -> hub-vnet, mgmt subnet
+                # or "f5-xc-ce-spoke-vnet-workload-nsg" -> f5-xc-ce-spoke-vnet, workload subnet
+
+                # Common abbreviation mappings
+                abbrev_map = {
+                    "mgmt": "management",
+                    "nva": "external",  # NVA typically in external/internet-facing subnet
+                    "ext": "external",
+                    "int": "internal",
+                    "wl": "workload",
+                }
+
+                for vnet_name in vnets:
+                    vnet_lower = vnet_name.lower()
+                    # Check if resource name starts with vnet name
+                    if resource_name.startswith(vnet_lower):
+                        # Extract subnet hint from remaining name
+                        remaining = resource_name[len(vnet_lower) :].strip("-")
+                        # Remove 'nsg' suffix
+                        remaining = remaining.replace("-nsg", "").replace("nsg", "").strip("-")
+
+                        # Expand abbreviations
+                        expanded = abbrev_map.get(remaining, remaining)
+
+                        # Match against subnet names
+                        for subnet_name in vnets[vnet_name]["subnets"]:
+                            subnet_lower = subnet_name.lower()
+                            # Check multiple matching strategies
+                            if (
+                                remaining in subnet_lower
+                                or expanded in subnet_lower
+                                or subnet_lower.endswith(remaining)
+                                or subnet_lower.endswith(expanded)
+                            ):
+                                subnet_id = f"nsg_match_{vnet_name}_{subnet_name}"
+                                break
+                        if subnet_id:
+                            break
+
+            # Special handling for route tables - use naming convention
+            if not subnet_id and ("routetable" in resource_type or "route_table" in resource_type):
+                # Route table naming: "hub-vnet-rt" -> hub-vnet
+                # or "f5-xc-ce-spoke-vnet-rt" -> f5-xc-ce-spoke-vnet
+                for vnet_name in vnets:
+                    vnet_lower = vnet_name.lower()
+                    if vnet_lower in resource_name:
+                        # Assign to first non-gateway subnet in this vnet (typically default or workload)
+                        for subnet_name in vnets[vnet_name]["subnets"]:
+                            if "gateway" not in subnet_name.lower():
+                                subnet_id = f"rt_match_{vnet_name}_{subnet_name}"
+                                break
+                        if subnet_id:
+                            break
 
             # Try to match to a subnet
             assigned = False
-            for _vnet_name, vnet_data in vnets.items():
-                for _subnet_name, subnet_data in vnet_data["subnets"].items():
-                    if subnet_id and subnet_data["id"] in subnet_id:
-                        subnet_data["resources"].append(resource)
-                        assigned = True
-                        break
+            for vnet_name, vnet_data in vnets.items():
+                for subnet_name, subnet_data in vnet_data["subnets"].items():
+                    # Match by subnet ID (exact or contained)
+                    if subnet_id:
+                        # Check for exact match or if subnet ID is contained in resource's subnet_id (for Azure full paths)
+                        if subnet_id == subnet_data["id"] or subnet_data["id"] in subnet_id:
+                            subnet_data["resources"].append(resource)
+                            assigned = True
+                            break
+                        # Check for naming-based match (NSG/route table convention)
+                        elif subnet_id.startswith("nsg_match_") or subnet_id.startswith(
+                            "rt_match_"
+                        ):
+                            parts = subnet_id.split("_")
+                            if len(parts) >= 4:
+                                matched_vnet = parts[2]
+                                matched_subnet = "_".join(parts[3:])
+                                if vnet_name == matched_vnet and subnet_name == matched_subnet:
+                                    subnet_data["resources"].append(resource)
+                                    assigned = True
+                                    break
                 if assigned:
                     break
 
-            # If not assigned to any subnet, create a default subnet
+            # If not assigned to any subnet, try to infer VNet from resource name before fallback
             if not assigned and vnets:
-                default_vnet = list(vnets.keys())[0]
+                # Try to infer VNet from resource naming pattern
+                inferred_vnet = None
+                for vnet_name in vnets:
+                    vnet_lower = vnet_name.lower()
+                    # Check if VNet name is part of resource name
+                    if vnet_lower in resource_name:
+                        inferred_vnet = vnet_name
+                        break
+
+                # Use inferred VNet if found, otherwise use first VNet
+                default_vnet = inferred_vnet if inferred_vnet else list(vnets.keys())[0]
+
                 if "default-subnet" not in vnets[default_vnet]["subnets"]:
                     vnets[default_vnet]["subnets"]["default-subnet"] = {
                         "id": "default-subnet",
