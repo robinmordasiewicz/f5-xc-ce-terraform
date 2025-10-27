@@ -4,18 +4,14 @@ Azure Resource Graph collection module.
 Queries Azure Resource Graph for infrastructure resources and relationships.
 """
 
-from typing import List, Optional
+from typing import Any, Optional
 
 from azure.core.exceptions import AzureError
-from azure.identity import (
-    AzureCliCredential,
-    DefaultAzureCredential,
-    ManagedIdentityCredential,
-)
+from azure.identity import AzureCliCredential, DefaultAzureCredential, ManagedIdentityCredential
 from azure.mgmt.resourcegraph import ResourceGraphClient
 from azure.mgmt.resourcegraph.models import QueryRequest, QueryRequestOptions
 
-from diagram_generator.exceptions import AzureAPIError, AuthenticationError
+from diagram_generator.exceptions import AuthenticationError, AzureAPIError
 from diagram_generator.models import AzureAuthMethod, AzureResource
 from diagram_generator.utils import get_logger, retry_on_exception
 
@@ -29,6 +25,7 @@ class AzureResourceGraphCollector:
         self,
         subscription_id: str,
         auth_method: AzureAuthMethod = AzureAuthMethod.AZURE_CLI,
+        resource_groups: Optional[list[str]] = None,
     ):
         """
         Initialize Azure Resource Graph collector.
@@ -36,17 +33,20 @@ class AzureResourceGraphCollector:
         Args:
             subscription_id: Azure subscription ID to query
             auth_method: Authentication method to use
+            resource_groups: Optional list of resource groups to filter queries (improves performance)
 
         Raises:
             AuthenticationError: If Azure authentication fails
         """
         self.subscription_id = subscription_id
         self.auth_method = auth_method
+        self.resource_groups = resource_groups or []
         self.client = self._initialize_client()
         logger.info(
             "Azure collector initialized",
             subscription_id=subscription_id,
             auth_method=auth_method.value,
+            resource_groups=self.resource_groups,
         )
 
     def _initialize_client(self) -> ResourceGraphClient:
@@ -74,7 +74,7 @@ class AzureResourceGraphCollector:
             raise AuthenticationError(f"Azure authentication failed: {e}") from e
 
     @retry_on_exception(max_attempts=3, delay=2.0, exceptions=(AzureError,))
-    def collect_resources(self, resource_types: Optional[List[str]] = None) -> List[AzureResource]:
+    def collect_resources(self, resource_types: Optional[list[str]] = None) -> list[AzureResource]:
         """
         Collect Azure resources from Resource Graph.
 
@@ -100,7 +100,7 @@ class AzureResourceGraphCollector:
             logger.error("Failed to collect Azure resources", error=str(e))
             raise AzureAPIError(f"Failed to collect Azure resources: {e}") from e
 
-    def _build_query(self, resource_types: Optional[List[str]] = None) -> str:
+    def _build_query(self, resource_types: Optional[list[str]] = None) -> str:
         """
         Build KQL query for Resource Graph.
 
@@ -124,6 +124,11 @@ class AzureResourceGraphCollector:
         """
 
         query = base_query.format(subscription_id=self.subscription_id)
+
+        # Add resource group filter if specified (improves performance)
+        if self.resource_groups:
+            rg_filter = "', '".join(self.resource_groups)
+            query += f"\n| where resourceGroup in ('{rg_filter}')"
 
         if resource_types:
             types_filter = "', '".join(resource_types)
@@ -161,7 +166,7 @@ class AzureResourceGraphCollector:
             "count": response.count,
         }
 
-    def _parse_resources(self, result: dict) -> List[AzureResource]:
+    def _parse_resources(self, result: dict) -> list[AzureResource]:
         """
         Parse Resource Graph results into AzureResource objects.
 
@@ -226,7 +231,7 @@ class AzureResourceGraphCollector:
             logger.warning("Could not extract resource group from ID", resource_id=resource_id)
             return "unknown"
 
-    def collect_network_resources(self) -> List[AzureResource]:
+    def collect_network_resources(self) -> list[AzureResource]:
         """
         Collect network-specific Azure resources.
 
@@ -244,7 +249,7 @@ class AzureResourceGraphCollector:
         ]
         return self.collect_resources(resource_types=network_types)
 
-    def collect_compute_resources(self) -> List[AzureResource]:
+    def collect_compute_resources(self) -> list[AzureResource]:
         """
         Collect compute-specific Azure resources.
 
@@ -257,3 +262,158 @@ class AzureResourceGraphCollector:
             "Microsoft.Compute/disks",
         ]
         return self.collect_resources(resource_types=compute_types)
+
+    def collect_load_balancer_relationships(self) -> dict[str, Any]:
+        """
+        Collect load balancer backend pool and frontend IP relationships.
+
+        Returns:
+            Dictionary mapping LB resource IDs to their backend targets and frontend configs
+        """
+        logger.info("Collecting load balancer relationships")
+
+        query = f"""
+        Resources
+        | where subscriptionId == '{self.subscription_id}'
+        | where type == 'microsoft.network/loadbalancers'
+        """
+
+        # Add resource group filter if specified
+        if self.resource_groups:
+            rg_filter = "', '".join(self.resource_groups)
+            query += f"\n        | where resourceGroup in ('{rg_filter}')"
+
+        query += """
+        | extend backendPools = properties.backendAddressPools
+        | extend frontendConfigs = properties.frontendIPConfigurations
+        | extend probes = properties.probes
+        | project id, name, backendPools, frontendConfigs, probes, properties
+        """
+
+        try:
+            result = self._execute_query(query)
+            relationships = {}
+
+            for lb in result.get("data", []):
+                lb_id = lb.get("id", "")
+                backend_pools = lb.get("backendPools", [])
+                frontend_configs = lb.get("frontendConfigs", [])
+
+                # Extract backend target IPs/NICs
+                backend_targets = []
+                for pool in backend_pools:
+                    if isinstance(pool, dict):
+                        pool_props = pool.get("properties", {})
+                        # Backend addresses can be NICs or IP addresses
+                        backend_ips = pool_props.get("backendIPConfigurations", [])
+                        for ip_config in backend_ips:
+                            if isinstance(ip_config, dict):
+                                target_id = ip_config.get("id", "")
+                                if target_id:
+                                    backend_targets.append(target_id)
+
+                # Extract frontend IPs (for inbound traffic identification)
+                frontend_ips = []
+                for frontend in frontend_configs:
+                    if isinstance(frontend, dict):
+                        frontend_props = frontend.get("properties", {})
+                        subnet_id = frontend_props.get("subnet", {}).get("id", "")
+                        public_ip_id = frontend_props.get("publicIPAddress", {}).get("id", "")
+                        if subnet_id:
+                            frontend_ips.append({"type": "internal", "subnet_id": subnet_id})
+                        if public_ip_id:
+                            frontend_ips.append({"type": "public", "public_ip_id": public_ip_id})
+
+                relationships[lb_id] = {
+                    "name": lb.get("name", ""),
+                    "backend_targets": backend_targets,
+                    "frontend_configs": frontend_ips,
+                    "is_public": any(fe["type"] == "public" for fe in frontend_ips),
+                }
+
+            logger.info(
+                "Load balancer relationships collected",
+                count=len(relationships),
+            )
+            return relationships
+
+        except Exception as e:
+            logger.error("Failed to collect LB relationships", error=str(e))
+            return {}
+
+    def collect_route_table_relationships(self) -> dict[str, Any]:
+        """
+        Collect route table next-hop relationships for traffic flow detection.
+
+        Returns:
+            Dictionary mapping route table IDs to their next-hop configurations
+        """
+        logger.info("Collecting route table relationships")
+
+        query = f"""
+        Resources
+        | where subscriptionId == '{self.subscription_id}'
+        | where type == 'microsoft.network/routetables'
+        """
+
+        # Add resource group filter if specified
+        if self.resource_groups:
+            rg_filter = "', '".join(self.resource_groups)
+            query += f"\n        | where resourceGroup in ('{rg_filter}')"
+
+        query += """
+        | extend routes = properties.routes
+        | extend subnets = properties.subnets
+        | project id, name, routes, subnets, properties
+        """
+
+        try:
+            result = self._execute_query(query)
+            relationships = {}
+
+            for rt in result.get("data", []):
+                rt_id = rt.get("id", "")
+                routes = rt.get("routes", [])
+                subnets = rt.get("subnets", [])
+
+                # Extract next-hop information
+                next_hops = []
+                for route in routes:
+                    if isinstance(route, dict):
+                        route_props = route.get("properties", {})
+                        next_hop_type = route_props.get("nextHopType", "")
+                        next_hop_ip = route_props.get("nextHopIpAddress", "")
+                        address_prefix = route_props.get("addressPrefix", "")
+
+                        if next_hop_type or next_hop_ip:
+                            next_hops.append(
+                                {
+                                    "type": next_hop_type,
+                                    "ip": next_hop_ip,
+                                    "prefix": address_prefix,
+                                }
+                            )
+
+                # Extract associated subnets
+                associated_subnets = []
+                for subnet in subnets:
+                    if isinstance(subnet, dict):
+                        subnet_id = subnet.get("id", "")
+                        if subnet_id:
+                            associated_subnets.append(subnet_id)
+
+                relationships[rt_id] = {
+                    "name": rt.get("name", ""),
+                    "next_hops": next_hops,
+                    "associated_subnets": associated_subnets,
+                }
+
+            logger.info(
+                "Route table relationships collected",
+                count=len(relationships),
+            )
+            return relationships
+
+        except Exception as e:
+            logger.error("Failed to collect route table relationships", error=str(e))
+            return {}

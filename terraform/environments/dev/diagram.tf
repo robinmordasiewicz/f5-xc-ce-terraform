@@ -4,6 +4,9 @@
 # It runs as part of the Terraform apply process and only executes when infrastructure
 # resources are created, modified, or destroyed.
 
+# Data source for current Azure subscription
+data "azurerm_subscription" "current" {}
+
 # Variable to enable/disable diagram generation
 variable "enable_diagram_generation" {
   description = "Enable automatic diagram generation after Terraform apply"
@@ -44,13 +47,13 @@ resource "null_resource" "infrastructure_diagram" {
     f5xc_site_id     = module.f5_xc_registration.site_id
 
     # Network topology changes
-    hub_address_space   = var.hub_vnet_address_space
-    spoke_address_space = var.spoke_vnet_address_space
+    hub_address_space   = jsonencode(var.hub_vnet_address_space)
+    spoke_address_space = jsonencode(var.spoke_vnet_address_space)
     peering_status      = jsonencode(module.spoke_vnet.peering_status)
 
     # Configuration changes
-    ce_vm_size = var.ce_vm_size
-    location   = var.location
+    ce_vm_size   = var.ce_vm_size
+    azure_region = var.azure_region
 
     # Force regeneration on timestamp (optional - comment out for only real changes)
     # timestamp           = timestamp()
@@ -61,31 +64,45 @@ resource "null_resource" "infrastructure_diagram" {
     command = <<-EOT
       echo "🎨 Generating infrastructure diagram..."
 
-      # Get project root directory
-      PROJECT_ROOT="${path.module}/../../.."
+      # Get project root directory (relative to terraform execution)
+      TERRAFORM_DIR="${path.module}"
+      PROJECT_ROOT="$TERRAFORM_DIR/../../.."
       DIAGRAM_TOOL="$PROJECT_ROOT/tools/diagram-generator"
-      CONFIG_FILE="$DIAGRAM_TOOL/config.yaml"
 
       # Check if diagram generator is installed
       if [ ! -d "$DIAGRAM_TOOL/.venv" ]; then
-        echo "⚠️  Diagram generator not installed. Run: ./scripts/setup-diagram-generator.sh"
+        echo "⚠️  Diagram generator not installed"
+        echo "⚠️  Run: cd $DIAGRAM_TOOL && python -m venv .venv && source .venv/bin/activate && pip install -e ."
         echo "⚠️  Skipping diagram generation..."
         exit 0
       fi
 
-      # Check if config exists (optional, can work without config file)
-      if [ ! -f "$CONFIG_FILE" ]; then
-        echo "ℹ️  Configuration file not found, using CLI parameters"
+      # Verify required environment variables (set by setup-backend.sh)
+      if [ -z "$AZURE_SUBSCRIPTION_ID" ]; then
+        echo "❌ AZURE_SUBSCRIPTION_ID not set - run scripts/setup-backend.sh first"
+        exit 1
+      fi
+
+      if [ -z "$TF_VAR_f5_xc_tenant" ] && [ -z "$F5XC_TENANT" ]; then
+        echo "❌ F5 XC tenant not configured - run scripts/setup-backend.sh first"
+        exit 1
       fi
 
       # Activate virtual environment
       echo "📦 Activating Python environment..."
       source "$DIAGRAM_TOOL/.venv/bin/activate"
 
-      # Generate diagram
+      # Generate diagram using environment-based authentication
+      # Authentication credentials are inherited from shell environment (setup-backend.sh)
       echo "🔄 Generating Draw.io diagram from Terraform state..."
-      if generate-diagram \
-        --terraform-path "${path.module}" \
+      echo "   Azure Subscription: $AZURE_SUBSCRIPTION_ID"
+      echo "   F5 XC Tenant: $${TF_VAR_f5_xc_tenant:-$$F5XC_TENANT}"
+      echo "   Terraform Path: $TERRAFORM_DIR"
+      echo "   Output Dir: ${var.diagram_config.output_dir}"
+      echo ""
+
+      if python -m diagram_generator.cli \
+        --terraform-path "$TERRAFORM_DIR" \
         --diagram-title "${var.diagram_config.diagram_title} - $(date +%Y-%m-%d)" \
         --output-dir "${var.diagram_config.output_dir}" \
         --verbose 2>&1 | tee diagram-generation.log; then
@@ -116,6 +133,14 @@ resource "null_resource" "infrastructure_diagram" {
 
     # Working directory for execution
     working_dir = path.module
+
+    # Inherit environment variables from shell (includes F5 XC credentials from setup-backend.sh)
+    environment = {
+      AZURE_SUBSCRIPTION_ID = data.azurerm_subscription.current.subscription_id
+      TF_VAR_f5_xc_tenant   = var.f5_xc_tenant
+      F5XC_TENANT           = var.f5_xc_tenant
+      # VES_P12_PASSWORD, VES_P12_CONTENT inherited from shell environment
+    }
   }
 
   # Ensure this runs after all infrastructure is created

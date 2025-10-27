@@ -7,9 +7,9 @@ across Terraform, Azure, and F5 XC resources.
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
 
 class ResourceSource(str, Enum):
@@ -39,8 +39,8 @@ class TerraformResource(BaseModel):
     type: str = Field(..., description="Terraform resource type (e.g., azurerm_virtual_network)")
     name: str = Field(..., description="Resource name")
     address: str = Field(..., description="Full Terraform address")
-    values: Dict[str, Any] = Field(default_factory=dict, description="Resource attributes")
-    depends_on: List[str] = Field(default_factory=list, description="Terraform dependencies")
+    values: dict[str, Any] = Field(default_factory=dict, description="Resource attributes")
+    depends_on: list[str] = Field(default_factory=list, description="Terraform dependencies")
 
 
 class AzureResource(BaseModel):
@@ -54,8 +54,14 @@ class AzureResource(BaseModel):
     type: str = Field(..., description="Azure resource type")
     location: str = Field(..., description="Azure region")
     resource_group: str = Field(..., description="Resource group name")
-    tags: Dict[str, str] = Field(default_factory=dict)
-    properties: Dict[str, Any] = Field(default_factory=dict)
+    tags: Optional[dict[str, str]] = Field(default_factory=dict)
+    properties: Optional[dict[str, Any]] = Field(default_factory=dict)
+
+    @field_validator("tags", "properties", mode="before")
+    @classmethod
+    def convert_none_to_dict(cls, value: Any) -> dict:
+        """Convert None values to empty dict for tags and properties."""
+        return value if value is not None else {}
 
 
 class F5XCResource(BaseModel):
@@ -70,8 +76,8 @@ class F5XCResource(BaseModel):
     )
     namespace: str = Field(..., description="F5 XC namespace")
     name: str = Field(..., description="Resource name")
-    spec: Dict[str, Any] = Field(default_factory=dict, description="Resource specification")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Resource metadata")
+    spec: dict[str, Any] = Field(default_factory=dict, description="Resource specification")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Resource metadata")
 
 
 class ResourceRelationship(BaseModel):
@@ -80,7 +86,7 @@ class ResourceRelationship(BaseModel):
     source_id: str = Field(..., description="Source resource identifier")
     target_id: str = Field(..., description="Target resource identifier")
     relationship_type: RelationshipType
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ConfigurationDrift(BaseModel):
@@ -96,9 +102,9 @@ class ConfigurationDrift(BaseModel):
 class CorrelatedResources(BaseModel):
     """Result of cross-referencing multiple data sources."""
 
-    resources: List[Dict[str, Any]] = Field(default_factory=list)
-    relationships: List[ResourceRelationship] = Field(default_factory=list)
-    drift: List[ConfigurationDrift] = Field(default_factory=list)
+    resources: list[dict[str, Any]] = Field(default_factory=list)
+    relationships: list[ResourceRelationship] = Field(default_factory=list)
+    drift: list[ConfigurationDrift] = Field(default_factory=list)
 
 
 class AzureAuthMethod(str, Enum):
@@ -113,6 +119,7 @@ class F5XCAuthMethod(str, Enum):
     """F5 XC authentication methods."""
 
     API_TOKEN = "api_token"
+    CERTIFICATE = "certificate"
     P12_CERTIFICATE = "p12_certificate"
 
 
@@ -140,6 +147,8 @@ class DiagramConfig(BaseModel):
     f5xc_api_token: Optional[str] = Field(None, description="F5 XC API token")
     f5xc_p12_cert_path: Optional[str] = Field(None, description="Path to P12 certificate")
     f5xc_p12_password: Optional[str] = Field(None, description="P12 certificate password")
+    f5xc_cert_path: Optional[str] = Field(None, description="Path to PEM certificate file")
+    f5xc_key_path: Optional[str] = Field(None, description="Path to PEM key file")
 
     # Diagram settings
     diagram_title: str = Field(default="Azure + F5 XC Infrastructure", description="Diagram title")
@@ -153,26 +162,23 @@ class DiagramConfig(BaseModel):
     match_by_tags: bool = Field(default=True, description="Correlate using tags/labels")
     match_by_ip: bool = Field(default=True, description="Correlate using IP addresses")
 
-    @field_validator("f5xc_api_token", "f5xc_p12_cert_path")
-    @classmethod
-    def validate_f5xc_auth(cls, v: Optional[str], info: Any) -> Optional[str]:
-        """Validate F5 XC authentication configuration."""
-        values = info.data
-        auth_method = values.get("f5xc_auth_method")
-
-        if auth_method == F5XCAuthMethod.API_TOKEN and info.field_name == "f5xc_api_token":
-            if not v:
+    @model_validator(mode="after")
+    def validate_f5xc_auth(self) -> "DiagramConfig":
+        """Validate F5 XC authentication configuration after all fields are set."""
+        if self.f5xc_auth_method == F5XCAuthMethod.API_TOKEN:
+            if not self.f5xc_api_token:
                 raise ValueError("f5xc_api_token required when using API_TOKEN auth method")
+        elif self.f5xc_auth_method == F5XCAuthMethod.CERTIFICATE:
+            # For CERTIFICATE, require cert_path AND key_path
+            if not (self.f5xc_cert_path and self.f5xc_key_path):
+                raise ValueError("CERTIFICATE auth requires both f5xc_cert_path and f5xc_key_path")
         elif (
-            auth_method == F5XCAuthMethod.P12_CERTIFICATE
-            and info.field_name == "f5xc_p12_cert_path"
+            self.f5xc_auth_method == F5XCAuthMethod.P12_CERTIFICATE and not self.f5xc_p12_cert_path
         ):
-            if not v:
-                raise ValueError(
-                    "f5xc_p12_cert_path required when using P12_CERTIFICATE auth method"
-                )
+            # For P12_CERTIFICATE, require p12_cert_path
+            raise ValueError("P12_CERTIFICATE auth requires f5xc_p12_cert_path")
 
-        return v
+        return self
 
 
 class LucidShape(BaseModel):
@@ -180,7 +186,7 @@ class LucidShape(BaseModel):
 
     id: str
     shape_type: str
-    bounding_box: Dict[str, float]
+    bounding_box: dict[str, float]
     text: str
     fill_color: str
     stroke_color: str = "#000000"
@@ -202,7 +208,7 @@ class LucidDocument(BaseModel):
 
     document_id: Optional[str] = None
     title: str
-    pages: List[Dict[str, Any]] = Field(default_factory=list)
+    pages: list[dict[str, Any]] = Field(default_factory=list)
     url: Optional[HttpUrl] = None
 
 
