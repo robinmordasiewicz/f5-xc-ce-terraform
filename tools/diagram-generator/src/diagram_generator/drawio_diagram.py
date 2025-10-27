@@ -113,7 +113,12 @@ class DrawioDiagramGenerator:
             output_dir=str(self.output_dir),
         )
 
-    def generate(self, correlated_resources: CorrelatedResources) -> DrawioDocument:
+    def generate(
+        self,
+        correlated_resources: CorrelatedResources,
+        lb_relationships: dict[str, Any] | None = None,
+        route_relationships: dict[str, Any] | None = None,
+    ) -> DrawioDocument:
         """
         Generate draw.io diagram from correlated resources.
 
@@ -134,7 +139,11 @@ class DrawioDiagramGenerator:
 
         try:
             # Create mxGraph XML structure
-            diagram_xml = self._create_diagram_xml(correlated_resources)
+            diagram_xml = self._create_diagram_xml(
+                correlated_resources,
+                lb_relationships=lb_relationships or {},
+                route_relationships=route_relationships or {},
+            )
 
             # Save to file
             output_file = self._save_diagram(diagram_xml)
@@ -158,7 +167,12 @@ class DrawioDiagramGenerator:
             logger.error("Draw.io diagram generation failed", error=str(e))
             raise DiagramGenerationError(f"Failed to generate draw.io diagram: {e}") from e
 
-    def _create_diagram_xml(self, correlated_resources: CorrelatedResources) -> ET.Element:
+    def _create_diagram_xml(
+        self,
+        correlated_resources: CorrelatedResources,
+        lb_relationships: dict[str, Any] | None = None,
+        route_relationships: dict[str, Any] | None = None,
+    ) -> ET.Element:
         """Create mxGraph XML structure."""
         # Root mxfile element
         mxfile = ET.Element("mxfile", host="app.diagrams.net", type="device")
@@ -200,8 +214,36 @@ class DrawioDiagramGenerator:
         # Generate shapes and get content height
         shapes, max_content_height = self._generate_shapes(root, correlated_resources.resources)
 
-        # Generate connections
-        self._generate_connections(root, correlated_resources.relationships, shapes)
+        # Detect traffic flows from Azure topology
+        traffic_flows = []
+        if lb_relationships or route_relationships:
+            traffic_flows = self._detect_traffic_flows(
+                lb_relationships=lb_relationships or {},
+                route_relationships=route_relationships or {},
+                resources=correlated_resources.resources,
+                shapes=shapes,
+            )
+            logger.info(f"Detected {len(traffic_flows)} traffic flow paths")
+
+        # Generate connections (both from correlator and detected traffic flows)
+        all_relationships = list(correlated_resources.relationships)
+
+        # Convert traffic flows to relationship format for rendering
+        for source_id, target_id, flow_type, metadata in traffic_flows:
+            # Create a pseudo-relationship for the traffic flow
+            flow_relationship = type(
+                "obj",
+                (object,),
+                {
+                    "source_id": source_id,
+                    "target_id": target_id,
+                    "relationship_type": flow_type,
+                    "metadata": metadata,
+                },
+            )()
+            all_relationships.append(flow_relationship)
+
+        self._generate_connections(root, all_relationships, shapes)
 
         # Add Microsoft Learn styling elements
         cell_id = len(root) + 1
@@ -673,6 +715,136 @@ class DrawioDiagramGenerator:
                 x += 200
 
         return cell_id, shapes
+
+    def _detect_traffic_flows(
+        self,
+        lb_relationships: dict[str, Any],
+        route_relationships: dict[str, Any],
+        resources: list[Any],
+        shapes: dict[str, str],
+    ) -> list[tuple[str, str, str, dict[str, Any]]]:
+        """
+        Detect traffic flow paths from Azure topology data.
+
+        Analyzes load balancer backend pools, route tables, and resource relationships
+        to identify actual data flow paths for visualization.
+
+        Args:
+            lb_relationships: Load balancer backend pool and frontend configs
+            route_relationships: Route table next-hop configurations
+            resources: All collected Azure resources
+            shapes: Map of resource IDs to shape IDs
+
+        Returns:
+            List of (source_id, target_id, flow_type, metadata) tuples
+        """
+        flows = []
+        logger.info("Detecting traffic flows from Azure topology")
+
+        # 1. Detect load balancer traffic flows
+        for lb_id, lb_data in lb_relationships.items():
+            lb_name = lb_data["name"]
+            is_public = lb_data["is_public"]
+
+            # Traffic type based on LB type
+            flow_type = "north_south" if is_public else "east_west"
+
+            # Create flows from LB to each backend target
+            for target_id in lb_data["backend_targets"]:
+                # Backend IP configs are nested in NICs - extract NIC ID
+                if "/networkInterfaces/" in target_id:
+                    nic_id = target_id.split("/ipConfigurations/")[0]
+
+                    # Find the VM that owns this NIC
+                    for resource in resources:
+                        if resource.get("type", "").lower() == "microsoft.compute/virtualmachines":
+                            vm_props = resource.get("properties", {})
+                            network_profile = vm_props.get("networkProfile", {})
+                            nic_refs = network_profile.get("networkInterfaces", [])
+
+                            for nic_ref in nic_refs:
+                                if isinstance(nic_ref, dict) and nic_ref.get("id") == nic_id:
+                                    vm_id = resource.get("id", "")
+                                    if lb_id in shapes and vm_id in shapes:
+                                        flows.append(
+                                            (
+                                                lb_id,
+                                                vm_id,
+                                                flow_type,
+                                                {
+                                                    "label": "Backend pool traffic",
+                                                    "lb_name": lb_name,
+                                                    "is_public": is_public,
+                                                },
+                                            )
+                                        )
+                                    break
+
+        # 2. Detect route table traffic flows (next-hop through NVA)
+        for _rt_id, rt_data in route_relationships.items():
+            rt_name = rt_data["name"]
+
+            for next_hop in rt_data["next_hops"]:
+                if next_hop["type"] == "VirtualAppliance" and next_hop["ip"]:
+                    # Find NVA by next-hop IP
+                    nva_ip = next_hop["ip"]
+
+                    # Search for VM/NIC with this private IP
+                    for resource in resources:
+                        if (
+                            resource.get("type", "").lower()
+                            == "microsoft.network/networkinterfaces"
+                        ):
+                            nic_props = resource.get("properties", {})
+                            ip_configs = nic_props.get("ipConfigurations", [])
+
+                            for ip_config in ip_configs:
+                                if isinstance(ip_config, dict):
+                                    ip_props = ip_config.get("properties", {})
+                                    private_ip = ip_props.get("privateIPAddress", "")
+
+                                    if private_ip == nva_ip:
+                                        # Found the NVA NIC - now find the VM
+                                        nic_id = resource.get("id", "")
+
+                                        for vm in resources:
+                                            if (
+                                                vm.get("type", "").lower()
+                                                == "microsoft.compute/virtualmachines"
+                                            ):
+                                                vm_props = vm.get("properties", {})
+                                                network_profile = vm_props.get("networkProfile", {})
+                                                nic_refs = network_profile.get(
+                                                    "networkInterfaces", []
+                                                )
+
+                                                for nic_ref in nic_refs:
+                                                    if (
+                                                        isinstance(nic_ref, dict)
+                                                        and nic_ref.get("id") == nic_id
+                                                    ):
+                                                        vm_id = vm.get("id", "")
+
+                                                        # Create flow for any subnet using this route table
+                                                        for subnet_id in rt_data[
+                                                            "associated_subnets"
+                                                        ]:
+                                                            if vm_id in shapes:
+                                                                flows.append(
+                                                                    (
+                                                                        subnet_id,
+                                                                        vm_id,
+                                                                        "nva_traffic",
+                                                                        {
+                                                                            "label": f"Route through {nva_ip}",
+                                                                            "route_table": rt_name,
+                                                                            "next_hop_ip": nva_ip,
+                                                                        },
+                                                                    )
+                                                                )
+
+        logger.info(f"Detected {len(flows)} traffic flows")
+        return flows
 
     def _generate_connections(
         self,

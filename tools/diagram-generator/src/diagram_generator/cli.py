@@ -15,11 +15,7 @@ from diagram_generator.azure_collector import AzureResourceGraphCollector
 from diagram_generator.correlation import ResourceCorrelator
 from diagram_generator.drawio_diagram import DrawioDiagramGenerator
 from diagram_generator.f5xc_collector import F5XCCollector
-from diagram_generator.models import (
-    AzureAuthMethod,
-    DiagramConfig,
-    F5XCAuthMethod,
-)
+from diagram_generator.models import AzureAuthMethod, DiagramConfig, F5XCAuthMethod
 from diagram_generator.terraform_collector import TerraformStateCollector
 from diagram_generator.utils import configure_logging, get_logger
 
@@ -110,7 +106,7 @@ logger = get_logger(__name__)
     help="Enable verbose logging",
 )
 def main(
-    config: Optional[Path],
+    config: Optional[Path],  # noqa: ARG001 - Reserved for future configuration file support
     terraform_path: Optional[Path],
     azure_subscription: str,
     azure_auth: str,
@@ -176,6 +172,12 @@ def main(
         azure_resources = azure_collector.collect_resources()
         click.echo(f"  ✓ Collected {len(azure_resources)} Azure resources")
 
+        # Collect Azure relationships for traffic flow visualization
+        lb_relationships = azure_collector.collect_load_balancer_relationships()
+        route_relationships = azure_collector.collect_route_table_relationships()
+        click.echo(f"  ✓ Collected {len(lb_relationships)} LB relationships")
+        click.echo(f"  ✓ Collected {len(route_relationships)} route table relationships")
+
         f5xc_collector = F5XCCollector(
             tenant=config_data.f5xc_tenant,
             auth_method=config_data.f5xc_auth_method,
@@ -209,19 +211,23 @@ def main(
         # Phase 3: Generate Draw.io diagram
         click.echo("\n🎨 Phase 3: Generating Draw.io diagram...")
 
-        # Generate diagram
+        # Generate diagram with traffic flow relationships
         diagram_generator = DrawioDiagramGenerator(
             title=config_data.diagram_title,
             auto_layout=config_data.auto_layout,
             group_by_platform=config_data.group_by_platform,
             output_dir=output_dir,
         )
-        document = diagram_generator.generate(correlated)
+        document = diagram_generator.generate(
+            correlated,
+            lb_relationships=lb_relationships,
+            route_relationships=route_relationships,
+        )
 
         click.echo("\n✅ Diagram generated successfully!")
         click.echo(f"   📄 Draw.io file: {document.file_path}")
         click.echo(f"   🖼️  PNG image: {document.image_file_path}")
-        click.echo(f"   💡 Display PNG in README, link to .drawio for editing")
+        click.echo("   💡 Display PNG in README, link to .drawio for editing")
 
         # Summary
         click.echo("\n📈 Summary:")
