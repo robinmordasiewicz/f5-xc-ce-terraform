@@ -17,23 +17,24 @@ Deploy F5 XC Customer Edge instances to Azure using infrastructure-as-code with 
 
 The following diagram provides a visual representation of the deployed Azure and F5 XC infrastructure, automatically generated from the current Terraform state:
 
-![Infrastructure Diagram](./F5_XC_CE_Infrastructure.png)
+![Infrastructure Diagram](./F5_XC_CE_Infrastructure.svg)
 
 **[📝 Edit Diagram](./F5_XC_CE_Infrastructure.drawio)** - Open the `.drawio` file to modify the diagram
 
 **Diagram Components**:
-- 🔵 **Azure Resources**: VNETs, subnets, load balancers, and virtual machines
+- 🔵 **Azure Resources**: VNETs, subnets, load balancers, and virtual machines with official Azure Architecture Icons V22
 - 🟢 **F5 XC Resources**: Customer Edge sites, registration details, and site configuration
 - 📊 **Relationships**: Network peerings, dependencies, and connectivity flows
+- 🎨 **Visual Standards**: Microsoft Learn-compliant styling with proper Azure brand colors
 
 **Editing the Diagram**:
 - **In GitHub**: Click the "Edit Diagram" link above to open the `.drawio` file in GitHub's Draw.io editor
 - **Locally**: Open `F5_XC_CE_Infrastructure.drawio` with [Draw.io Desktop](https://github.com/jgraph/drawio-desktop/releases)
 - **Online Editor**: Import the `.drawio` file at [diagrams.net](https://app.diagrams.net)
 
-**Automatic Updates**: Both the PNG image and `.drawio` source file are automatically regenerated whenever infrastructure changes are applied via Terraform, ensuring they always reflect the current deployed state.
+**Automatic Updates**: Both the SVG diagram and `.drawio` source file are automatically regenerated whenever infrastructure changes are applied via Terraform, ensuring they always reflect the current deployed state.
 
-> 💡 **Note**: Both diagram files are version-controlled in Git, providing a visual history of infrastructure changes over time.
+> 💡 **Note**: Diagram files use SVG format for scalable, high-quality rendering with embedded Azure Architecture Icons V22. Both files are version-controlled in Git, providing a visual history of infrastructure changes over time.
 
 ## Prerequisites
 
