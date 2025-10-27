@@ -39,23 +39,23 @@ class DrawioDiagramGenerator:
         "nsg": "#FF8C00",  # Dark orange for NSGs
     }
 
-    # Azure resource shapes using Draw.io Azure stencil library
+    # Azure resource shapes using geometric shapes (Microsoft Learn style)
     AZURE_SHAPE_STYLES = {
         # VNet containers - dashed border like Microsoft Learn
         "vnet": "rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#0078D4;strokeWidth=2;fontSize=12;fontStyle=1;dashed=1;dashPattern=5 5;",
         "subnet": "rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1;fontSize=10;verticalAlign=top;",
         "gateway_subnet": "rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1;fontSize=10;verticalAlign=top;",
         "nva_subnet": "rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1;fontSize=10;verticalAlign=top;",
-        # Azure resource icons
-        "vm": "shape=mxgraph.azure.virtual_machine;fillColor=#0078D4;strokeColor=#005A9E;strokeWidth=1;",
-        "lb": "shape=mxgraph.azure.load_balancer;fillColor=#00BCF2;strokeColor=#0078D4;strokeWidth=1;",
-        "gateway": "shape=mxgraph.azure.virtual_network_gateway;fillColor=#FF6C37;strokeColor=#CC5529;strokeWidth=1;",
-        "nsg": "shape=mxgraph.azure.network_security_group;fillColor=#FF8C00;strokeColor=#CC7000;strokeWidth=1;",
-        "nic": "shape=mxgraph.azure.network_interface_card;fillColor=#0078D4;strokeColor=#005A9E;strokeWidth=1;",
-        "pip": "shape=mxgraph.azure.public_ip;fillColor=#00BCF2;strokeColor=#0078D4;strokeWidth=1;",
+        # Azure resource icons using simple geometric shapes
+        "vm": "rounded=1;whiteSpace=wrap;html=1;fillColor=#00A4EF;strokeColor=#0078D4;strokeWidth=2;fontSize=10;fontColor=#FFFFFF;fontStyle=1;",  # Rounded rectangle for VMs
+        "lb": "shape=rhombus;perimeter=rhombusPerimeter;whiteSpace=wrap;html=1;fillColor=#00BCF2;strokeColor=#0078D4;strokeWidth=2;fontSize=10;fontColor=#000000;fontStyle=1;",  # Diamond for load balancers
+        "gateway": "shape=rhombus;perimeter=rhombusPerimeter;whiteSpace=wrap;html=1;fillColor=#FF6C37;strokeColor=#CC5529;strokeWidth=2;fontSize=10;fontColor=#FFFFFF;fontStyle=1;",  # Diamond for gateways
+        "nsg": "rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF4CE;strokeColor=#FF8C00;strokeWidth=2;fontSize=9;fontColor=#000000;",  # Rectangle for NSGs
+        "nic": "rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F4F8;strokeColor=#0078D4;strokeWidth=1;fontSize=9;",
+        "pip": "ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#00BCF2;strokeColor=#0078D4;strokeWidth=2;fontSize=9;fontColor=#FFFFFF;",
         # Special elements matching Microsoft Learn
         "internet_cloud": "ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#5D9CEC;strokeColor=#FFFFFF;strokeWidth=2;fontColor=#FFFFFF;fontSize=14;fontStyle=1;",
-        "onpremises_building": "shape=mxgraph.azure.building;fillColor=#0078D4;strokeColor=#005A9E;strokeWidth=1;",
+        "onpremises_building": "rounded=0;whiteSpace=wrap;html=1;fillColor=#0078D4;strokeColor=#005A9E;strokeWidth=2;fontSize=10;fontColor=#FFFFFF;",  # Simple building rectangle
         "route_table": "rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1;fontSize=9;align=left;verticalAlign=top;",
         "sequence_number": "ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#107C10;strokeColor=#FFFFFF;strokeWidth=2;fontColor=#FFFFFF;fontSize=12;fontStyle=1;",
         "f5xc_site": "shape=cloud;fillColor=#50C878;strokeColor=#2E7D54;strokeWidth=2;",
@@ -273,6 +273,13 @@ class DrawioDiagramGenerator:
                     max_content_height = max(max_content_height, content_height)
                     x_offset += 700
 
+                elif platform == "Terraform":
+                    # Skip Terraform resources - they clutter Microsoft Learn style diagrams
+                    logger.info(
+                        f"Skipping {len(platform_resources)} Terraform resources for cleaner diagram"
+                    )
+                    continue
+
                 else:
                     # Other platforms use simple grouping
                     cell_id_counter, other_shapes, content_height = self._create_simple_group(
@@ -343,9 +350,30 @@ class DrawioDiagramGenerator:
 
             shapes[vnet_data.get("id", vnet_name)] = vnet_id
 
-            # Create subnets within VNet
+            # Create subnets within VNet (skip empty subnets for cleaner diagrams)
             subnet_y = 60
             for subnet_name, subnet_data in vnet_data["subnets"].items():
+                # Pre-filter architectural resources to check if subnet has any meaningful content
+                temp_architectural_resources = []
+                for resource in subnet_data.get("resources", []):
+                    resource_label = self._format_resource_detail(resource)
+                    # Skip resources that return empty labels
+                    if not resource_label or resource_label.strip() == "":
+                        continue
+                    # Skip network infrastructure resources that clutter the diagram
+                    resource_type = resource.get("type", "").lower()
+                    if any(
+                        skip in resource_type
+                        for skip in ["networkinterface", "publicipaddress", "disk", "identity"]
+                    ):
+                        continue
+                    temp_architectural_resources.append(resource)
+
+                # Skip empty subnets (Microsoft Learn diagrams omit empty containers)
+                if not temp_architectural_resources:
+                    logger.debug(f"Skipping empty subnet: {subnet_name}")
+                    continue
+
                 subnet_id = str(cell_id)
                 cell_id += 1
 
@@ -380,12 +408,12 @@ class DrawioDiagramGenerator:
 
                 shapes[subnet_data.get("id", subnet_name)] = subnet_id
 
-                # Filter and add architectural resources within subnet (skip NICs, PIPs, disks, identities)
+                # Use pre-filtered architectural resources
                 resource_x = 20
                 resource_y = 35  # Lower starting position for better spacing
-                architectural_resources = []
+                architectural_resources = temp_architectural_resources
 
-                for resource in subnet_data.get("resources", []):
+                for resource in architectural_resources:
                     resource_label = self._format_resource_detail(resource)
 
                     # Skip resources that return empty labels (filtered out by _get_resource_role_label)
