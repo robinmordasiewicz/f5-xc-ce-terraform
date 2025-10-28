@@ -106,6 +106,9 @@ resource "null_resource" "infrastructure_diagram" {
         --terraform-path "$TERRAFORM_DIR" \
         --diagram-title "${var.diagram_config.diagram_title}" \
         --output-dir "${var.diagram_config.output_dir}" \
+        --f5xc-auth certificate \
+        --f5xc-cert-path "$${VOLT_API_CERT}" \
+        --f5xc-key-path "$${VOLT_API_KEY}" \
         --verbose 2>&1)
 
       # Display the output
@@ -115,15 +118,15 @@ resource "null_resource" "infrastructure_diagram" {
       if [ $? -eq 0 ]; then
         echo "✅ Diagram generated successfully!"
         DRAWIO_FILE=$(echo "$OUTPUT" | grep -o 'Draw.io file: [^[:space:]]*' | sed 's/Draw.io file: //' | head -1)
-        PNG_FILE=$(echo "$OUTPUT" | grep -o 'PNG image: [^[:space:]]*' | sed 's/PNG image: //' | head -1)
-        if [ -n "$DRAWIO_FILE" ] && [ -n "$PNG_FILE" ]; then
+        SVG_FILE=$(echo "$OUTPUT" | grep -o 'SVG image: [^[:space:]]*' | sed 's/SVG image: //' | head -1)
+        if [ -n "$DRAWIO_FILE" ] && [ -n "$SVG_FILE" ]; then
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📊 Infrastructure Diagram Generated"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📄 Draw.io file: $DRAWIO_FILE"
-          echo "🖼️  PNG image: $PNG_FILE"
-          echo "💡 Display PNG in README, link to .drawio for editing"
+          echo "🖼️  SVG image: $SVG_FILE"
+          echo "💡 Display SVG in README, link to .drawio for editing"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
         fi
@@ -145,7 +148,7 @@ resource "null_resource" "infrastructure_diagram" {
       AZURE_SUBSCRIPTION_ID = data.azurerm_subscription.current.subscription_id
       TF_VAR_f5_xc_tenant   = var.f5_xc_tenant
       F5XC_TENANT           = var.f5_xc_tenant
-      # VES_P12_PASSWORD, VES_P12_CONTENT inherited from shell environment
+      # VOLT_API_CERT, VOLT_API_KEY, VOLT_API_URL inherited from shell environment (.env file)
     }
   }
 

@@ -305,8 +305,8 @@ def main(
 
         click.echo("\n✅ Diagram generated successfully!")
         click.echo(f"   📄 Draw.io file: {document.file_path}")
-        click.echo(f"   🖼️  PNG image: {document.image_file_path}")
-        click.echo("   💡 Display PNG in README, link to .drawio for editing")
+        click.echo(f"   🖼️  SVG image: {document.image_file_path}")
+        click.echo("   💡 Display SVG in README, link to .drawio for editing")
 
         # Summary
         click.echo("\n📈 Summary:")
