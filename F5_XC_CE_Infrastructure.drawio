@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <mxfile host="app.diagrams.net" type="device">
-  <diagram id="5c643a44-8167-467c-acbc-a3399e97078e" name="F5_XC_CE_Infrastructure">
+  <diagram id="6b9ee8e9-2c0b-4415-9e62-61586262142b" name="F5_XC_CE_Infrastructure">
     <mxGraphModel dx="1434" dy="796" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
       <root>
         <mxCell id="0"/>
@@ -33,7 +33,7 @@
           <mxGeometry as="geometry" x="380" y="35" width="100" height="90"/>
         </mxCell>
         <mxCell id="11" value="f5-xc-ce-spoke-vnet\n10.1.0.0/16" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=50;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=none;strokeColor=#0078D4;strokeWidth=2;fontSize=14;fontColor=#000000;dashed=1;dashPattern=5 5;" vertex="1" parent="1">
-          <mxGeometry as="geometry" x="50" y="850" width="850" height="400"/>
+          <mxGeometry as="geometry" x="50" y="600" width="850" height="400"/>
         </mxCell>
         <mxCell id="12" value="workload-subnet\n10.1.1.0/24" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1;fontSize=10;verticalAlign=top;" vertex="1" parent="11">
           <mxGeometry as="geometry" x="20" y="60" width="810" height="150"/>
@@ -60,13 +60,13 @@
           <mxGeometry as="geometry" x="375" y="10" width="200" height="100"/>
         </mxCell>
         <mxCell id="19" value="━━━━ Inbound traffic" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#0078D4;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry as="geometry" x="50" y="1600" width="200" height="30"/>
+          <mxGeometry as="geometry" x="50" y="1100" width="200" height="30"/>
         </mxCell>
         <mxCell id="20" value="━━━━ Return traffic" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#107C10;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry as="geometry" x="50" y="1635" width="200" height="30"/>
+          <mxGeometry as="geometry" x="50" y="1135" width="200" height="30"/>
         </mxCell>
         <mxCell id="21" value="Microsoft Azure" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#0078D4;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry as="geometry" x="1400" y="1350" width="150" height="30"/>
+          <mxGeometry as="geometry" x="1400" y="850" width="150" height="30"/>
         </mxCell>
         <mxCell id="22" value="1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#107C10;strokeColor=#FFFFFF;strokeWidth=3;fontColor=#FFFFFF;fontSize=14;fontStyle=1;shadow=1;" vertex="1" parent="1">
           <mxGeometry as="geometry" x="650" y="130" width="30" height="30"/>
