@@ -101,17 +101,21 @@ resource "null_resource" "infrastructure_diagram" {
       echo "   Output Dir: ${var.diagram_config.output_dir}"
       echo ""
 
-      # Use temporary file for log output to avoid committing build artifacts
-      LOG_FILE=$(mktemp /tmp/diagram-generation.XXXXXX.log)
-
-      if python -m diagram_generator.cli \
+      # Capture output to parse file paths while displaying to stdout
+      OUTPUT=$(python -m diagram_generator.cli \
         --terraform-path "$TERRAFORM_DIR" \
         --diagram-title "${var.diagram_config.diagram_title}" \
         --output-dir "${var.diagram_config.output_dir}" \
-        --verbose 2>&1 | tee "$LOG_FILE"; then
+        --verbose 2>&1)
+
+      # Display the output
+      echo "$OUTPUT"
+
+      # Check exit status and parse output
+      if [ $? -eq 0 ]; then
         echo "✅ Diagram generated successfully!"
-        DRAWIO_FILE=$(grep -o 'Draw.io file: [^[:space:]]*' "$LOG_FILE" | sed 's/Draw.io file: //' | head -1)
-        PNG_FILE=$(grep -o 'PNG image: [^[:space:]]*' "$LOG_FILE" | sed 's/PNG image: //' | head -1)
+        DRAWIO_FILE=$(echo "$OUTPUT" | grep -o 'Draw.io file: [^[:space:]]*' | sed 's/Draw.io file: //' | head -1)
+        PNG_FILE=$(echo "$OUTPUT" | grep -o 'PNG image: [^[:space:]]*' | sed 's/PNG image: //' | head -1)
         if [ -n "$DRAWIO_FILE" ] && [ -n "$PNG_FILE" ]; then
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -125,11 +129,7 @@ resource "null_resource" "infrastructure_diagram" {
         fi
       else
         echo "⚠️  Diagram generation encountered an error (non-blocking)"
-        echo "Check log file for details: $LOG_FILE"
       fi
-
-      # Clean up temporary log file
-      rm -f "$LOG_FILE"
 
       # Deactivate virtual environment
       deactivate
