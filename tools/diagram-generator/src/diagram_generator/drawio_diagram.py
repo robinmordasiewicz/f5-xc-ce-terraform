@@ -254,8 +254,13 @@ class DrawioDiagramGenerator:
         # Add Microsoft Learn styling elements
         cell_id = len(root) + 1
 
-        # Add Internet cloud at the top (always above first content)
-        cell_id = self._add_internet_cloud(root, cell_id)
+        # Add Internet cloud at the top (centered above hub VNet)
+        # Use hub VNet position from layout tracking or fallback to default
+        hub_x = self.layout.get("hub_vnet_x", 700)
+        hub_width = self.layout.get("hub_vnet_width", 850)
+        cell_id = self._add_internet_cloud(
+            root, cell_id, hub_vnet_x=hub_x, hub_vnet_width=hub_width
+        )
 
         # Add traffic flow legend at the bottom (below all content with margin)
         legend_y_position = max_content_height + 50
@@ -350,6 +355,11 @@ class DrawioDiagramGenerator:
         """
         Create hierarchical Azure structure: Hub → Subnets → Resources.
 
+        Implements Microsoft Learn architectural layout standards:
+        - Hub VNets positioned at top (y=150)
+        - Spoke VNets positioned below hub (y=850+)
+        - Internet cloud centered above hub VNet
+
         Args:
             root: mxGraph root element
             resources: Azure resources to organize
@@ -364,14 +374,50 @@ class DrawioDiagramGenerator:
         # Group Azure resources by VNet
         vnets = self._group_by_vnet(resources)
 
-        y_offset = 50
-        for vnet_name, vnet_data in vnets.items():
+        # Sort VNets: Hub first, then spokes (alphabetically within each group)
+        # This follows Microsoft Learn architectural diagram conventions
+        sorted_vnets = sorted(
+            vnets.items(),
+            key=lambda x: (
+                0 if self._classify_vnet_role(x[0], x[1]) == "hub" else 1,
+                x[0],  # Alphabetical within each group
+            ),
+        )
+
+        # Track hub VNet position for Internet cloud centering
+        hub_vnet_x = None
+
+        # Vertical layout: Hub at top (y=150), spokes below (y=850+)
+        hub_y_position = 150  # Below Internet cloud (at y=10)
+        spoke_y_position = 850  # Below hub VNet
+        vnet_vertical_spacing = 700  # Space between stacked spoke VNets
+
+        current_spoke_y = spoke_y_position
+
+        for vnet_name, vnet_data in sorted_vnets:
             # Create VNet container
             vnet_id = str(cell_id)
             cell_id += 1
 
             vnet_width = 850
             vnet_height = 600 if len(vnet_data["subnets"]) > 2 else 400
+
+            # Determine VNet role and position
+            vnet_role = self._classify_vnet_role(vnet_name, vnet_data)
+
+            # Position based on role: hub at top, spokes stacked vertically below
+            if vnet_role == "hub":
+                vnet_y = hub_y_position
+                # Track first hub VNet position for Internet cloud centering
+                if hub_vnet_x is None:
+                    hub_vnet_x = x_offset
+                    # Store hub position for later Internet cloud update
+                    self.layout["hub_vnet_x"] = x_offset
+                    self.layout["hub_vnet_width"] = vnet_width
+            else:
+                # Spoke VNets stack vertically below hub
+                vnet_y = current_spoke_y
+                current_spoke_y += vnet_vertical_spacing
 
             # VNet container (swimlane) - using dashed border style
             vnet_label = f"{vnet_name}\\n{vnet_data.get('address_space', '')}"
@@ -390,7 +436,7 @@ class DrawioDiagramGenerator:
                 root[-1],
                 "mxGeometry",
                 x=str(x_offset),
-                y=str(y_offset),
+                y=str(vnet_y),
                 width=str(vnet_width),
                 height=str(vnet_height),
                 attrib={"as": "geometry"},
@@ -498,9 +544,9 @@ class DrawioDiagramGenerator:
 
                 subnet_y += 170
 
-            y_offset += vnet_height + 50
-
-        return cell_id, shapes, y_offset
+        # Return max Y coordinate for positioning legend and branding
+        max_y = current_spoke_y if current_spoke_y > hub_y_position + 600 else hub_y_position + 600
+        return cell_id, shapes, max_y
 
     def _create_f5xc_group(
         self, root: ET.Element, resources: list[Any], x_offset: int, cell_id: int
@@ -1134,6 +1180,61 @@ class DrawioDiagramGenerator:
 
         return "\\n".join(label_parts)
 
+    def _classify_vnet_role(self, vnet_name: str, vnet_data: dict) -> str:
+        """
+        Classify VNet as 'hub' or 'spoke' based on naming and resource characteristics.
+
+        Hub VNets typically contain:
+        - Gateway subnets (VPN/ExpressRoute gateways)
+        - NVA subnets (Network Virtual Appliances, firewalls)
+        - Shared services (DNS, Active Directory)
+
+        Args:
+            vnet_name: VNet name
+            vnet_data: VNet metadata including subnets
+
+        Returns:
+            'hub' or 'spoke'
+        """
+        name_lower = vnet_name.lower()
+
+        # Explicit naming convention check
+        if "hub" in name_lower:
+            return "hub"
+        if "spoke" in name_lower:
+            return "spoke"
+
+        # Heuristic: Hub VNets contain gateway or NVA infrastructure
+        subnets = vnet_data.get("subnets", {})
+
+        # Check for gateway subnet (standard Azure naming)
+        has_gateway = any("gatewaysubnet" in s.lower() for s in subnets)
+
+        # Check for NVA/firewall subnet
+        has_nva = any(
+            keyword in s.lower()
+            for s in subnets
+            for keyword in ["nva", "firewall", "external", "dmz"]
+        )
+
+        # Check for shared services indicators
+        has_shared_services = any(
+            keyword in s.lower()
+            for s in subnets
+            for keyword in ["shared", "services", "management", "mgmt"]
+        )
+
+        # Hub VNets typically have gateway or NVA infrastructure
+        if has_gateway or has_nva:
+            return "hub"
+
+        # If has shared services but no gateway/NVA, likely still a hub
+        if has_shared_services and len(subnets) > 1:
+            return "hub"
+
+        # Default to spoke for application workload VNets
+        return "spoke"
+
     def _group_by_vnet(self, resources: list[Any]) -> dict[str, Any]:
         """
         Group Azure resources hierarchically by VNet and Subnet.
@@ -1582,16 +1683,29 @@ class DrawioDiagramGenerator:
         # Remove empty groups
         return {k: v for k, v in grouped.items() if v}
 
-    def _add_internet_cloud(self, root: ET.Element, cell_id: int) -> int:
+    def _add_internet_cloud(
+        self, root: ET.Element, cell_id: int, hub_vnet_x: int = 700, hub_vnet_width: int = 850
+    ) -> int:
         """
-        Add Internet cloud shape at the top of the diagram.
+        Add Internet cloud shape at the top of the diagram, centered above hub VNet.
         Matches Microsoft Learn style with prominent cloud icon.
+
+        Args:
+            root: mxGraph root element
+            cell_id: Current cell ID
+            hub_vnet_x: X position of hub VNet (for centering)
+            hub_vnet_width: Width of hub VNet (for centering calculation)
 
         Returns:
             Next available cell ID
         """
         cloud_id = str(cell_id)
         cell_id += 1
+
+        # Center Internet cloud above hub VNet
+        cloud_width = 200
+        cloud_height = 100
+        cloud_x = hub_vnet_x + (hub_vnet_width - cloud_width) // 2
 
         ET.SubElement(
             root,
@@ -1606,10 +1720,10 @@ class DrawioDiagramGenerator:
         ET.SubElement(
             root[-1],
             "mxGeometry",
-            x="700",
+            x=str(cloud_x),
             y="10",
-            width="200",
-            height="100",
+            width=str(cloud_width),
+            height=str(cloud_height),
             attrib={"as": "geometry"},
         )
 
