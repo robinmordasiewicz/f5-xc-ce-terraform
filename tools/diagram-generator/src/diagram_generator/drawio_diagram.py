@@ -388,10 +388,10 @@ class DrawioDiagramGenerator:
         hub_vnet_x = None
 
         # Vertical layout: Hub at top (y=150), spokes below with consistent spacing
-        hub_y_position = 150  # Below Internet cloud (at y=10), gap = 140px
+        hub_y_position = 150  # Below Internet cloud (bottom at y=110), gap = 40px
         vnet_height = 400  # Standard VNet container height
-        vnet_spacing = 140  # Consistent spacing between elements (matches Internet-to-Hub gap)
-        spoke_y_position = hub_y_position + vnet_height + vnet_spacing  # 150 + 400 + 140 = 690
+        vnet_spacing = 40  # Consistent spacing between elements (matches Internet-to-Hub gap)
+        spoke_y_position = hub_y_position + vnet_height + vnet_spacing  # 150 + 400 + 40 = 590
         vnet_vertical_spacing = (
             vnet_height + vnet_spacing
         )  # Space between stacked spoke VNets (540px)
