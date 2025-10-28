@@ -56,3 +56,6 @@ Thumbs.db
 *.bak
 temp/
 tmp/
+
+# Diagram generation log files
+diagram-generation.log
