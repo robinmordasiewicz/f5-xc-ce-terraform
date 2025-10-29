@@ -69,12 +69,6 @@ variable "f5_xc_namespace" {
   default     = "system"
 }
 
-variable "f5_xc_api_token" {
-  description = "F5 XC API token"
-  type        = string
-  sensitive   = true
-}
-
 variable "f5_xc_tenant" {
   description = "F5 XC tenant name"
   type        = string

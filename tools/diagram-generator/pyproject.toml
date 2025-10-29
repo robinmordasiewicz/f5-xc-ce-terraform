@@ -50,6 +50,9 @@ dependencies = [
     "pyyaml>=6.0",
     "python-dotenv>=1.0.0",
 
+    # Image processing for Azure icons
+    "cairosvg>=2.7.0",  # SVG to PNG conversion for Draw.io compatibility
+
     # Logging and output
     "structlog>=24.1.0",
     "colorama>=0.4.6",
