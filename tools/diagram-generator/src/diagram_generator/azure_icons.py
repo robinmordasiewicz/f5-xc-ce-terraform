@@ -101,21 +101,49 @@ class AzureIconConverter:
 
     def svg_to_base64_data_uri(self, svg_path: Path) -> str:
         """
-        Convert SVG file to base64 data URI for embedding.
+        Convert SVG file to base64 PNG data URI for embedding.
+
+        Draw.io has known issues rendering embedded SVG images (GitHub #347, #1506).
+        Converting to PNG ensures compatibility with Draw.io application and all export formats.
 
         Args:
             svg_path: Path to SVG file
 
         Returns:
-            Base64-encoded data URI string
+            Base64-encoded PNG data URI string (or SVG fallback if conversion fails)
         """
-        with open(svg_path, "rb") as f:
-            svg_data = f.read()
+        try:
+            # Try importing cairosvg for SVG to PNG conversion
+            import cairosvg
 
-        # Base64 encode
-        b64_data = base64.b64encode(svg_data).decode("utf-8")
+            # Convert SVG to PNG bytes at 2x scale for better quality
+            png_data = cairosvg.svg2png(url=str(svg_path), scale=2.0)
 
-        return f"data:image/svg+xml;base64,{b64_data}"
+            # Base64 encode PNG
+            b64_data = base64.b64encode(png_data).decode("utf-8")
+
+            logger.debug(f"Converted SVG to PNG for embedding: {svg_path.name}")
+            return f"data:image/png;base64,{b64_data}"
+
+        except ImportError:
+            logger.warning(
+                "cairosvg not installed - icons may not render",
+                path=str(svg_path),
+                recommendation="Install: pip install cairosvg",
+            )
+            # Fallback to SVG (known to have rendering issues)
+            with open(svg_path, "rb") as f:
+                svg_data = f.read()
+            b64_data = base64.b64encode(svg_data).decode("utf-8")
+            return f"data:image/svg+xml;base64,{b64_data}"
+
+        except Exception as e:
+            logger.error(f"SVG to PNG conversion failed: {e}", path=str(svg_path))
+            # Fallback to SVG on any error
+            with open(svg_path, "rb") as f:
+                svg_data = f.read()
+            b64_data = base64.b64encode(svg_data).decode("utf-8")
+            return f"data:image/svg+xml;base64,{b64_data}"
 
     def extract_svg_dimensions(self, svg_path: Path) -> tuple[float, float]:
         """

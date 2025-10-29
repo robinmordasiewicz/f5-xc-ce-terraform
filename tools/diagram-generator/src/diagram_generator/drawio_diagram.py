@@ -9,9 +9,9 @@ import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import unquote
 from xml.dom import minidom
 
-from diagram_generator.azure_icons import get_azure_icon_converter
 from diagram_generator.exceptions import DiagramGenerationError
 from diagram_generator.models import CorrelatedResources, DrawioDocument, ResourceSource
 from diagram_generator.utils import format_resource_label, get_logger, get_resource_short_name
@@ -96,10 +96,12 @@ class DrawioDiagramGenerator:
         self.title = title
         self.auto_layout = auto_layout
         self.group_by_platform = group_by_platform
-        self.output_dir = output_dir or Path.cwd()
+        self.output_dir = (output_dir or Path.cwd()).resolve()
 
-        # Initialize Azure icon converter
-        self.icon_converter = get_azure_icon_converter()
+        # Initialize Azure shape library (replaces broken icon converter)
+        from diagram_generator.azure_shape_library import get_azure_shape_library
+
+        self.shape_library = get_azure_shape_library()
 
         # Layout configuration
         self.layout = {
@@ -990,10 +992,18 @@ class DrawioDiagramGenerator:
         else:
             return self.AZURE_SHAPE_STYLES["default"]
 
-    def _get_azure_resource_style(self, resource: Any) -> str:
-        """Get Azure-specific resource style with proper Azure shapes and icons."""
-        # Extract resource type directly from the resource (not using get_resource_short_name which returns name)
+    def _get_azure_shape_xml(
+        self, resource: Any
+    ) -> tuple[Optional[str], Optional[tuple[str, str]]]:
+        """
+        Get Azure icon shape XML and dimensions from shape library.
+
+        Returns:
+            Tuple of (shape_style_from_xml, (width, height)) or (None, None) if not found
+        """
+        # Extract resource type directly from the resource
         full_resource_type = resource.get("type", "").lower()
+        resource_name = resource.get("name", "unknown")
 
         # Extract the short type name from full Azure resource type
         # Example: "microsoft.compute/virtualmachines" -> "virtualmachines"
@@ -1002,35 +1012,101 @@ class DrawioDiagramGenerator:
         else:
             resource_type = full_resource_type
 
-        # Icon type mapping (maps short Azure type names to icon keys)
-        icon_type_map = {
-            "virtualmachines": "virtual_machine",
-            "vm": "vm",
-            "loadbalancers": "load_balancer",
-            "lb": "lb",
-            "virtualnetworkgateways": "virtual_network_gateway",
-            "gateway": "virtual_network_gateway",
-            "networksecuritygroups": "network_security_group",
-            "nsg": "nsg",
-            "networkinterfaces": "network_interface",
-            "nic": "nic",
-            "publicipaddresses": "public_ip",
-            "pip": "public_ip",
-            "routetables": "route_table",
-        }
+        logger.info(
+            "🔍 Looking up Azure icon for resource",
+            resource_name=resource_name,
+            full_type=full_resource_type,
+            short_type=resource_type,
+        )
 
-        # Find matching icon type
-        icon_resource_type = icon_type_map.get(resource_type)
+        # Try to get shape XML from library
+        shape_xml = self.shape_library.get_shape_xml(resource_type)
+        if not shape_xml:
+            logger.warning(
+                "❌ No Azure shape library icon found",
+                resource_type=resource_type,
+                resource_name=resource_name,
+            )
+            return None, None
 
-        # Try to use Azure icon if available
-        if icon_resource_type:
-            icon_data = self.icon_converter.get_icon_for_resource(icon_resource_type)
-            if icon_data:
-                logger.debug(f"Using Azure icon for {resource_type}: {icon_data['icon_path']}")
-                return icon_data["style"]
+        logger.info(
+            "✅ Found shape XML in library", resource_type=resource_type, xml_length=len(shape_xml)
+        )
 
-        # Fallback to geometric shapes if icon not available
-        logger.debug(f"No icon available for {resource_type}, using geometric shapes")
+        # Parse the URL-encoded XML
+        decoded_xml = unquote(shape_xml)
+        logger.debug(
+            "📄 Decoded XML preview", resource_type=resource_type, xml_preview=decoded_xml[:200]
+        )
+
+        # Extract style from mxCell element
+        # Format: <mxCell id="2" value="" style="..." vertex="1" parent="1">
+        import re
+
+        style_match = re.search(r'style="([^"]+)"', decoded_xml)
+        if not style_match:
+            logger.error(
+                "❌ No style found in shape XML",
+                resource_type=resource_type,
+                xml_preview=decoded_xml[:500],
+            )
+            return None, None
+
+        style = style_match.group(1)
+
+        # Check if style contains SVG data URI
+        has_svg = "data:image/svg+xml" in style
+        has_png = "data:image/png" in style
+        logger.info(
+            "🎨 Extracted style from library",
+            resource_type=resource_type,
+            has_svg=has_svg,
+            has_png=has_png,
+            style_length=len(style),
+            style_preview=style[:150],
+        )
+
+        # Extract dimensions from mxGeometry
+        # Format: <mxGeometry width="80" height="80" as="geometry"/>
+        width_match = re.search(r'width="(\d+)"', decoded_xml)
+        height_match = re.search(r'height="(\d+)"', decoded_xml)
+
+        width = width_match.group(1) if width_match else "80"
+        height = height_match.group(1) if height_match else "80"
+
+        logger.info(
+            "✅ Successfully extracted Azure shape",
+            resource_type=resource_type,
+            width=width,
+            height=height,
+            has_svg_icon=has_svg,
+        )
+        return style, (width, height)
+
+    def _get_azure_resource_style(self, resource: Any) -> str:
+        """Get Azure-specific resource style with proper Azure shapes and icons."""
+        resource_name = resource.get("name", "unknown")
+        full_resource_type = resource.get("type", "").lower()
+
+        # Try to get style from shape library first
+        shape_style, dimensions = self._get_azure_shape_xml(resource)
+        if shape_style:
+            logger.info(
+                "✅ Using Azure shape library icon",
+                resource_name=resource_name,
+                style_preview=shape_style[:100],
+            )
+            return shape_style
+
+        # Fallback to geometric shapes if library icon not available
+        resource_type = (
+            full_resource_type.split("/")[-1] if "/" in full_resource_type else full_resource_type
+        )
+
+        logger.warning(
+            f"⚠️  No Azure icon available for {resource_type}, falling back to geometric shapes",
+            resource_name=resource_name,
+        )
         if "virtualmachine" in resource_type or "vm" in resource_type:
             return self.AZURE_SHAPE_STYLES["vm"]
         elif "loadbalancer" in resource_type or "_lb" in resource_type:
