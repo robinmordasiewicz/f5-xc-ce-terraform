@@ -5,7 +5,7 @@ Extracts resources and dependencies from Terraform state files.
 """
 
 import json
-import subprocess
+import subprocess  # nosec B404 - Controlled subprocess usage for terraform CLI
 from pathlib import Path
 from typing import Optional
 
@@ -102,7 +102,7 @@ class TerraformStateCollector:
             TerraformStateError: If terraform command fails
         """
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607 - Controlled terraform execution with fixed args
                 ["terraform", "show", "-json"],
                 cwd=self.state_path,
                 capture_output=True,

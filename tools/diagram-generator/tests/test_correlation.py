@@ -2,8 +2,6 @@
 Tests for resource correlation engine.
 """
 
-import pytest
-
 from diagram_generator.correlation import ResourceCorrelator
 from diagram_generator.models import RelationshipType
 
@@ -172,8 +170,9 @@ def test_index_resources_by_tags(sample_terraform_resources):
 
 def test_extract_resource_group_from_id():
     """Test resource group extraction."""
-    from diagram_generator.azure_collector import AzureResourceGraphCollector
     from unittest.mock import patch
+
+    from diagram_generator.azure_collector import AzureResourceGraphCollector
 
     with patch("diagram_generator.azure_collector.AzureCliCredential"):
         collector = AzureResourceGraphCollector(subscription_id="sub-123")

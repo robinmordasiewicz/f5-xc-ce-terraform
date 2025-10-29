@@ -191,3 +191,7 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
+
+# Bandit security linter configuration
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "venv"]

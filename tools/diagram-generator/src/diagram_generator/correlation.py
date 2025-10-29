@@ -5,7 +5,7 @@ Cross-references resources from Terraform, Azure, and F5 XC to build
 unified infrastructure graph with relationships and drift detection.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 import networkx as nx
 
@@ -19,11 +19,7 @@ from diagram_generator.models import (
     ResourceRelationship,
     TerraformResource,
 )
-from diagram_generator.utils import (
-    extract_ip_addresses,
-    get_logger,
-    sanitize_resource_id,
-)
+from diagram_generator.utils import extract_ip_addresses, get_logger, sanitize_resource_id
 
 logger = get_logger(__name__)
 
@@ -59,9 +55,9 @@ class ResourceCorrelator:
 
     def correlate(
         self,
-        terraform_resources: List[TerraformResource],
-        azure_resources: List[AzureResource],
-        f5xc_resources: List[F5XCResource],
+        terraform_resources: list[TerraformResource],
+        azure_resources: list[AzureResource],
+        f5xc_resources: list[F5XCResource],
     ) -> CorrelatedResources:
         """
         Correlate resources from all three sources.
@@ -131,9 +127,9 @@ class ResourceCorrelator:
 
     def _add_resources_to_graph(
         self,
-        terraform_resources: List[TerraformResource],
-        azure_resources: List[AzureResource],
-        f5xc_resources: List[F5XCResource],
+        terraform_resources: list[TerraformResource],
+        azure_resources: list[AzureResource],
+        f5xc_resources: list[F5XCResource],
     ) -> None:
         """Add all resources as nodes in the graph."""
         # Add Terraform resources
@@ -142,20 +138,22 @@ class ResourceCorrelator:
             self.graph.add_node(node_id, resource=resource, source="terraform")
 
         # Add Azure resources
-        for resource in azure_resources:
-            node_id = sanitize_resource_id(resource.id)
-            self.graph.add_node(node_id, resource=resource, source="azure")
+        for azure_resource in azure_resources:
+            node_id = sanitize_resource_id(azure_resource.id)
+            self.graph.add_node(node_id, resource=azure_resource, source="azure")
 
         # Add F5 XC resources
-        for resource in f5xc_resources:
-            node_id = sanitize_resource_id(f"{resource.namespace}/{resource.type}/{resource.name}")
-            self.graph.add_node(node_id, resource=resource, source="f5xc")
+        for f5xc_resource in f5xc_resources:
+            node_id = sanitize_resource_id(
+                f"{f5xc_resource.namespace}/{f5xc_resource.type}/{f5xc_resource.name}"
+            )
+            self.graph.add_node(node_id, resource=f5xc_resource, source="f5xc")
 
         logger.info("Added resources to graph", node_count=self.graph.number_of_nodes())
 
     def _correlate_terraform_dependencies(
-        self, terraform_resources: List[TerraformResource]
-    ) -> List[ResourceRelationship]:
+        self, terraform_resources: list[TerraformResource]
+    ) -> list[ResourceRelationship]:
         """
         Create relationships based on Terraform dependencies.
 
@@ -189,8 +187,8 @@ class ResourceCorrelator:
         return relationships
 
     def _correlate_terraform_to_azure(
-        self, terraform_resources: List[TerraformResource], azure_resources: List[AzureResource]
-    ) -> List[ResourceRelationship]:
+        self, terraform_resources: list[TerraformResource], azure_resources: list[AzureResource]
+    ) -> list[ResourceRelationship]:
         """
         Correlate Terraform resources to Azure resources by resource ID.
 
@@ -236,8 +234,8 @@ class ResourceCorrelator:
         return relationships
 
     def _correlate_f5xc_to_azure(
-        self, f5xc_resources: List[F5XCResource], azure_resources: List[AzureResource]
-    ) -> List[ResourceRelationship]:
+        self, f5xc_resources: list[F5XCResource], azure_resources: list[AzureResource]
+    ) -> list[ResourceRelationship]:
         """
         Correlate F5 XC resources to Azure resources.
 
@@ -269,8 +267,8 @@ class ResourceCorrelator:
         return relationships
 
     def _match_origin_pool_to_vms(
-        self, origin_pool: F5XCResource, azure_vms: List[AzureResource]
-    ) -> List[ResourceRelationship]:
+        self, origin_pool: F5XCResource, azure_vms: list[AzureResource]
+    ) -> list[ResourceRelationship]:
         """Match F5 XC origin pool to Azure VMs."""
         relationships = []
 
@@ -314,13 +312,13 @@ class ResourceCorrelator:
         return relationships
 
     def _match_site_to_vnets(
-        self, site: F5XCResource, azure_vnets: List[AzureResource]
-    ) -> List[ResourceRelationship]:
+        self, site: F5XCResource, azure_vnets: list[AzureResource]
+    ) -> list[ResourceRelationship]:
         """Match F5 XC site to Azure VNets."""
         relationships = []
 
         # Extract site network configuration
-        site_networks = site.spec.get("network", {})
+        site.spec.get("network", {})
 
         # Match based on network properties (simplified)
         for vnet in azure_vnets:
@@ -354,10 +352,10 @@ class ResourceCorrelator:
 
     def _correlate_by_tags(
         self,
-        terraform_resources: List[TerraformResource],
-        azure_resources: List[AzureResource],
-        f5xc_resources: List[F5XCResource],
-    ) -> List[ResourceRelationship]:
+        terraform_resources: list[TerraformResource],
+        azure_resources: list[AzureResource],
+        f5xc_resources: list[F5XCResource],
+    ) -> list[ResourceRelationship]:
         """
         Correlate resources by matching tags/labels.
 
@@ -386,7 +384,7 @@ class ResourceCorrelator:
             # Find resources with matching tags
             tf_matches = tf_by_tag.get((tag_key, tag_value), [])
             azure_matches = azure_by_tag.get((tag_key, tag_value), [])
-            f5xc_matches = f5xc_by_tag.get((tag_key, tag_value), [])
+            f5xc_by_tag.get((tag_key, tag_value), [])
 
             # Create relationships between matching resources
             for tf_res in tf_matches:
@@ -403,14 +401,14 @@ class ResourceCorrelator:
         return relationships
 
     def _correlate_by_ip(
-        self, f5xc_resources: List[F5XCResource], azure_resources: List[AzureResource]
-    ) -> List[ResourceRelationship]:
+        self, _f5xc_resources: list[F5XCResource], _azure_resources: list[AzureResource]
+    ) -> list[ResourceRelationship]:
         """
         Correlate resources by IP address matching.
 
         Args:
-            f5xc_resources: F5 XC resources
-            azure_resources: Azure resources
+            _f5xc_resources: F5 XC resources (unused - placeholder for future implementation)
+            _azure_resources: Azure resources (unused - placeholder for future implementation)
 
         Returns:
             List of IP-based relationships
@@ -423,8 +421,8 @@ class ResourceCorrelator:
         return []
 
     def _index_resources_by_tags(
-        self, resources: List[Any], source: str
-    ) -> Dict[tuple[str, str], List[str]]:
+        self, resources: list[Any], source: str
+    ) -> dict[tuple[str, str], list[str]]:
         """
         Build index of resources by their tags.
 
@@ -435,7 +433,7 @@ class ResourceCorrelator:
         Returns:
             Dictionary mapping (tag_key, tag_value) to resource IDs
         """
-        tag_index: Dict[tuple[str, str], List[str]] = {}
+        tag_index: dict[tuple[str, str], list[str]] = {}
 
         for resource in resources:
             # Get resource ID
@@ -463,8 +461,8 @@ class ResourceCorrelator:
         return tag_index
 
     def _detect_drift(
-        self, terraform_resources: List[TerraformResource], azure_resources: List[AzureResource]
-    ) -> List[ConfigurationDrift]:
+        self, terraform_resources: list[TerraformResource], azure_resources: list[AzureResource]
+    ) -> list[ConfigurationDrift]:
         """
         Detect configuration drift between Terraform and Azure.
 

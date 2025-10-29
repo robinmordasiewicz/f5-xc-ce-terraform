@@ -25,8 +25,8 @@ PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d'.' -f1-2)
 REQUIRED_VERSION="3.9"
 
 if [[ "$(printf '%s\n' "$REQUIRED_VERSION" "$PYTHON_VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]]; then
-    echo -e "${RED}✗ Python 3.9 or higher required. Found: $PYTHON_VERSION${NC}"
-    exit 1
+  echo -e "${RED}✗ Python 3.9 or higher required. Found: $PYTHON_VERSION${NC}"
+  exit 1
 fi
 echo -e "${GREEN}✓ Python $PYTHON_VERSION${NC}\n"
 
@@ -35,11 +35,11 @@ echo -e "${YELLOW}Setting up virtual environment...${NC}"
 cd "$PROJECT_DIR"
 
 if [ ! -d "venv" ]; then
-    echo "Creating new virtual environment..."
-    python3 -m venv venv
-    echo -e "${GREEN}✓ Virtual environment created${NC}"
+  echo "Creating new virtual environment..."
+  python3 -m venv venv
+  echo -e "${GREEN}✓ Virtual environment created${NC}"
 else
-    echo -e "${GREEN}✓ Virtual environment exists${NC}"
+  echo -e "${GREEN}✓ Virtual environment exists${NC}"
 fi
 
 # Activate virtual environment
@@ -64,41 +64,41 @@ echo -e "${GREEN}✓ Pre-commit hooks installed${NC}"
 echo -e "\n${YELLOW}Checking optional tools...${NC}"
 
 # Check Terraform
-if command -v terraform &> /dev/null; then
-    TERRAFORM_VERSION=$(terraform version | head -n1 | cut -d'v' -f2)
-    echo -e "${GREEN}✓ Terraform $TERRAFORM_VERSION${NC}"
+if command -v terraform &>/dev/null; then
+  TERRAFORM_VERSION=$(terraform version | head -n1 | cut -d'v' -f2)
+  echo -e "${GREEN}✓ Terraform $TERRAFORM_VERSION${NC}"
 else
-    echo -e "${YELLOW}⚠ Terraform not found (optional for testing)${NC}"
+  echo -e "${YELLOW}⚠ Terraform not found (optional for testing)${NC}"
 fi
 
 # Check Azure CLI
-if command -v az &> /dev/null; then
-    AZ_VERSION=$(az version --output tsv 2>/dev/null | grep "azure-cli" | awk '{print $2}')
-    echo -e "${GREEN}✓ Azure CLI $AZ_VERSION${NC}"
+if command -v az &>/dev/null; then
+  AZ_VERSION=$(az version --output tsv 2>/dev/null | grep "azure-cli" | awk '{print $2}')
+  echo -e "${GREEN}✓ Azure CLI $AZ_VERSION${NC}"
 else
-    echo -e "${YELLOW}⚠ Azure CLI not found (required for Azure authentication)${NC}"
+  echo -e "${YELLOW}⚠ Azure CLI not found (required for Azure authentication)${NC}"
 fi
 
 # Check OpenSSL
-if command -v openssl &> /dev/null; then
-    OPENSSL_VERSION=$(openssl version | cut -d' ' -f2)
-    echo -e "${GREEN}✓ OpenSSL $OPENSSL_VERSION${NC}"
+if command -v openssl &>/dev/null; then
+  OPENSSL_VERSION=$(openssl version | cut -d' ' -f2)
+  echo -e "${GREEN}✓ OpenSSL $OPENSSL_VERSION${NC}"
 else
-    echo -e "${YELLOW}⚠ OpenSSL not found (required for P12 certificate extraction)${NC}"
+  echo -e "${YELLOW}⚠ OpenSSL not found (required for P12 certificate extraction)${NC}"
 fi
 
 # Run tests to verify installation
 echo -e "\n${YELLOW}Running tests to verify installation...${NC}"
 if pytest tests/ -q --tb=no; then
-    echo -e "${GREEN}✓ All tests passed${NC}"
+  echo -e "${GREEN}✓ All tests passed${NC}"
 else
-    echo -e "${RED}✗ Some tests failed${NC}"
+  echo -e "${RED}✗ Some tests failed${NC}"
 fi
 
 # Create example .env file if it doesn't exist
 echo -e "\n${YELLOW}Checking environment configuration...${NC}"
 if [ ! -f ".env" ]; then
-    cat > .env << 'EOF'
+  cat >.env <<'EOF'
 # Azure Configuration
 export AZURE_SUBSCRIPTION_ID="your-subscription-id"
 
@@ -111,10 +111,10 @@ export LUCID_CLIENT_ID="your-lucid-client-id"
 export LUCID_CLIENT_SECRET="your-lucid-client-secret"
 export LUCID_REDIRECT_URI="http://localhost:8080/callback"
 EOF
-    echo -e "${GREEN}✓ Created .env template${NC}"
-    echo -e "${YELLOW}  → Edit .env with your credentials${NC}"
+  echo -e "${GREEN}✓ Created .env template${NC}"
+  echo -e "${YELLOW}  → Edit .env with your credentials${NC}"
 else
-    echo -e "${GREEN}✓ .env file exists${NC}"
+  echo -e "${GREEN}✓ .env file exists${NC}"
 fi
 
 # Summary

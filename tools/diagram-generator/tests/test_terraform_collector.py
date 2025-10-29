@@ -7,7 +7,6 @@ import subprocess
 from unittest.mock import Mock, patch
 
 import pytest
-
 from diagram_generator.exceptions import TerraformStateError
 from diagram_generator.terraform_collector import TerraformStateCollector
 

@@ -7,7 +7,7 @@ SVG-to-mxGraph conversion for Draw.io diagrams.
 
 import base64
 import re
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405 - Parsing trusted Azure icon SVG files
 from pathlib import Path
 from typing import Optional
 
@@ -156,7 +156,7 @@ class AzureIconConverter:
             Tuple of (width, height) in pixels
         """
         try:
-            tree = ET.parse(svg_path)
+            tree = ET.parse(svg_path)  # nosec B314 - Parsing trusted local Azure icon SVG files
             root = tree.getroot()
 
             # Try to get width/height attributes

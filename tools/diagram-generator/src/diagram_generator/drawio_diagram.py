@@ -4,13 +4,13 @@ Draw.io diagram generation module.
 Converts correlated resources into draw.io (diagrams.net) mxGraph XML format.
 """
 
-import subprocess
+import subprocess  # nosec B404 - Controlled subprocess for drawio CLI export
 import uuid
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405 - XML generation for trusted diagram data
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import unquote
-from xml.dom import minidom
+from xml.dom import minidom  # nosec B408 - XML formatting for generated diagram data
 
 from diagram_generator.exceptions import DiagramGenerationError
 from diagram_generator.models import CorrelatedResources, DrawioDocument, ResourceSource
@@ -1972,7 +1972,7 @@ class DrawioDiagramGenerator:
 
         # Pretty print XML
         xml_string = ET.tostring(diagram_xml, encoding="unicode")
-        dom = minidom.parseString(xml_string)
+        dom = minidom.parseString(xml_string)  # nosec B318 - Parsing generated diagram XML, not user input
         pretty_xml = dom.toprettyxml(indent="  ")
 
         # Write to file
@@ -2007,7 +2007,7 @@ class DrawioDiagramGenerator:
             # --transparent: transparent background
             # --border 10: add border around diagram
             # --crop: crop to diagram size
-            subprocess.run(
+            subprocess.run(  # nosec B603 B607 - Controlled drawio CLI export with fixed args
                 [
                     "drawio",
                     "--export",

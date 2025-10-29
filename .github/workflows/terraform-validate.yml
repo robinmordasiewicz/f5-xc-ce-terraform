@@ -1,6 +1,6 @@
 name: Terraform Validate (Reusable)
 
-on:
+'on':
   workflow_call:
     inputs:
       terraform_version:

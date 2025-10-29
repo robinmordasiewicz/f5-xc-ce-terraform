@@ -6,7 +6,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 import requests
-
 from diagram_generator.exceptions import AuthenticationError, F5XCAPIError
 from diagram_generator.f5xc_collector import F5XCCollector
 from diagram_generator.models import F5XCAuthMethod
@@ -82,11 +81,13 @@ def test_collect_resources_success(mock_f5xc_session):
         )
 
         # Mock all collection methods
-        with patch.object(collector, "collect_http_loadbalancers", return_value=[]):
-            with patch.object(collector, "collect_origin_pools", return_value=[]):
-                with patch.object(collector, "collect_virtual_sites", return_value=[]):
-                    with patch.object(collector, "collect_sites", return_value=[]):
-                        resources = collector.collect_resources()
+        with (
+            patch.object(collector, "collect_http_loadbalancers", return_value=[]),
+            patch.object(collector, "collect_origin_pools", return_value=[]),
+            patch.object(collector, "collect_virtual_sites", return_value=[]),
+            patch.object(collector, "collect_sites", return_value=[]),
+        ):
+            resources = collector.collect_resources()
 
         assert isinstance(resources, list)
 

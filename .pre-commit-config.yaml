@@ -61,11 +61,11 @@ repos:
         name: Check executables have shebangs
         # CHECK-ONLY: Reports error if executable files lack shebangs
 
-      # NOTE: check-shebang-scripts-are-executable REMOVED
-      # Reason: Automatically makes files executable (chmod +x) - violates CHECK-ONLY requirement
-      # This hook modifies file permissions and cannot be configured for read-only mode
+  # NOTE: check-shebang-scripts-are-executable REMOVED
+  # Reason: Automatically makes files executable (chmod +x) - violates CHECK-ONLY requirement
+  # This hook modifies file permissions and cannot be configured for read-only mode
 
-# ============================================================================
+  # ============================================================================
 # STAGE 2: Syntax Validation
 # ============================================================================
 
@@ -91,7 +91,7 @@ repos:
         # CHECK-ONLY: Detects JSON issues without auto-fixing
         # Note: pretty-format-json removed (violates CHECK-ONLY requirement)
 
-# ============================================================================
+  # ============================================================================
 # STAGE 3: Security Checks (READ-ONLY)
 # ============================================================================
 
@@ -125,7 +125,7 @@ repos:
           - --args=--framework terraform
           - --args=--skip-check CKV_AZURE_*  # Skip Azure-specific checks that may not apply
 
-# ============================================================================
+  # ============================================================================
 # STAGE 4: Linting (READ-ONLY)
 # ============================================================================
 
@@ -209,7 +209,7 @@ repos:
         args:
           - --args=--lockfile=false
           - --args=--output-check
-        # Note: Removed --add-to-existing-file (violates CHECK-ONLY requirement)
+          # Note: Removed --add-to-existing-file (violates CHECK-ONLY requirement)
 
   # Shell Script Formatting (CHECK-ONLY)
   - repo: https://github.com/scop/pre-commit-shfmt
@@ -268,9 +268,9 @@ repos:
   #       args: ['-d']  # -d = display diffs only (CHECK-ONLY)
   #       types: [go]
 
-# ============================================================================
-# STAGE 6: Additional Validations
-# ============================================================================
+  # ============================================================================
+  # STAGE 6: Additional Validations
+  # ============================================================================
 
   # Check for debugging artifacts
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -292,7 +292,7 @@ repos:
         name: Validate TOML syntax
         types: [toml]
 
-# ============================================================================
+  # ============================================================================
 # Repository-Specific Hooks
 # ============================================================================
 
