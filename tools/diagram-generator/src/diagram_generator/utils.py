@@ -7,7 +7,7 @@ Provides structured logging, retry logic, and common helper functions.
 import logging
 import time
 from functools import wraps
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, TypeVar
 
 import structlog
 from requests.adapters import HTTPAdapter
@@ -227,7 +227,7 @@ def extract_ip_addresses(resource_dict: dict[str, Any]) -> list[str]:
     ips: list[str] = []
 
     def search_dict(d: dict[str, Any]) -> None:
-        for key, value in d.items():
+        for _key, value in d.items():
             if isinstance(value, str):
                 matches = ip_pattern.findall(value)
                 ips.extend(matches)

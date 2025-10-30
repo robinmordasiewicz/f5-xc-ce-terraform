@@ -5,7 +5,7 @@ name: Branch Cleanup After Merge
 # Constitution Reference: Lines 104-109, 416-422
 # Rationale: Enforce mandatory branch cleanup to prevent stale branches
 
-on:
+'on':
   pull_request:
     types:
       - closed

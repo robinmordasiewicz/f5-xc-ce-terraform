@@ -4,20 +4,15 @@ Pytest configuration and fixtures for diagram generator tests.
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import MagicMock, Mock
 
 import pytest
-
-from diagram_generator.models import (
-    AzureResource,
-    F5XCResource,
-    TerraformResource,
-)
+from diagram_generator.models import AzureResource, F5XCResource, TerraformResource
 
 
 @pytest.fixture
-def mock_terraform_state() -> Dict[str, Any]:
+def mock_terraform_state() -> dict[str, Any]:
     """Mock Terraform state JSON."""
     return {
         "values": {
@@ -55,7 +50,7 @@ def mock_terraform_state() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def mock_azure_resources() -> List[Dict[str, Any]]:
+def mock_azure_resources() -> list[dict[str, Any]]:
     """Mock Azure Resource Graph query results."""
     return [
         {
@@ -96,7 +91,7 @@ def mock_azure_resources() -> List[Dict[str, Any]]:
 
 
 @pytest.fixture
-def mock_f5xc_resources() -> List[Dict[str, Any]]:
+def mock_f5xc_resources() -> dict[str, list[dict[str, Any]]]:
     """Mock F5 XC API response."""
     return {
         "items": [
@@ -121,7 +116,7 @@ def mock_f5xc_resources() -> List[Dict[str, Any]]:
 
 
 @pytest.fixture
-def sample_terraform_resources() -> List[TerraformResource]:
+def sample_terraform_resources() -> list[TerraformResource]:
     """Sample TerraformResource objects."""
     return [
         TerraformResource(
@@ -150,7 +145,7 @@ def sample_terraform_resources() -> List[TerraformResource]:
 
 
 @pytest.fixture
-def sample_azure_resources() -> List[AzureResource]:
+def sample_azure_resources() -> list[AzureResource]:
     """Sample AzureResource objects."""
     return [
         AzureResource(
@@ -175,7 +170,7 @@ def sample_azure_resources() -> List[AzureResource]:
 
 
 @pytest.fixture
-def sample_f5xc_resources() -> List[F5XCResource]:
+def sample_f5xc_resources() -> list[F5XCResource]:
     """Sample F5XCResource objects."""
     return [
         F5XCResource(

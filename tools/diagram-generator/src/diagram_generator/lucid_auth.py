@@ -15,7 +15,7 @@ from typing import Optional
 
 import requests
 
-from diagram_generator.exceptions import AuthenticationError, LucidAPIError
+from diagram_generator.exceptions import AuthenticationError
 from diagram_generator.utils import get_logger
 
 logger = get_logger(__name__)
@@ -25,7 +25,7 @@ class LucidAuthClient:
     """Handles Lucidchart OAuth 2.0 authentication."""
 
     AUTH_URL = "https://lucid.app/oauth2/authorize"
-    TOKEN_URL = "https://api.lucid.co/oauth2/token"
+    TOKEN_URL = "https://api.lucid.co/oauth2/token"  # nosec B105 - Public API endpoint URL, not password
     TOKEN_CACHE_FILE = Path.home() / ".lucid_token_cache.json"
 
     def __init__(

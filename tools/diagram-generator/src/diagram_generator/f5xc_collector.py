@@ -148,7 +148,7 @@ class F5XCCollector:
         Raises:
             AuthenticationError: If extraction fails
         """
-        import subprocess
+        import subprocess  # nosec B404 - Controlled subprocess for openssl CLI
 
         try:
             # Create temporary files for cert and key
@@ -157,7 +157,7 @@ class F5XCCollector:
             key_path = temp_dir / "f5xc_key.pem"
 
             # Extract certificate (with legacy provider for OpenSSL 3.x compatibility)
-            subprocess.run(
+            subprocess.run(  # nosec B603 B607 - Controlled openssl execution with user cert file
                 [
                     "openssl",
                     "pkcs12",
@@ -177,7 +177,7 @@ class F5XCCollector:
             )
 
             # Extract private key (with legacy provider for OpenSSL 3.x compatibility)
-            subprocess.run(
+            subprocess.run(  # nosec B603 B607 - Controlled openssl execution with user cert file
                 [
                     "openssl",
                     "pkcs12",

@@ -54,8 +54,8 @@ class AzureResource(BaseModel):
     type: str = Field(..., description="Azure resource type")
     location: str = Field(..., description="Azure region")
     resource_group: str = Field(..., description="Resource group name")
-    tags: Optional[dict[str, str]] = Field(default_factory=dict)
-    properties: Optional[dict[str, Any]] = Field(default_factory=dict)
+    tags: dict[str, str] = Field(default_factory=dict)
+    properties: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("tags", "properties", mode="before")
     @classmethod
@@ -118,7 +118,7 @@ class AzureAuthMethod(str, Enum):
 class F5XCAuthMethod(str, Enum):
     """F5 XC authentication methods."""
 
-    API_TOKEN = "api_token"
+    API_TOKEN = "api_token"  # nosec B105 - Enum value, not actual password
     CERTIFICATE = "certificate"
     P12_CERTIFICATE = "p12_certificate"
 

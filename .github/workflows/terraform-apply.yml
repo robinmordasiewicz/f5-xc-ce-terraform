@@ -1,6 +1,6 @@
 name: Terraform Apply (Main Branch Deployment)
 
-on:
+'on':
   push:
     branches:
       - main

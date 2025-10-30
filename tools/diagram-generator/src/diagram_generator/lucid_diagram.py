@@ -5,7 +5,7 @@ Converts correlated resources into Lucidchart diagrams with layout and grouping.
 """
 
 import uuid
-from typing import Any, Dict, List
+from typing import Any
 
 import requests
 
@@ -16,6 +16,7 @@ from diagram_generator.models import (
     LucidDocument,
     LucidLine,
     LucidShape,
+    ResourceRelationship,
     ResourceSource,
 )
 from diagram_generator.utils import format_resource_label, get_logger, get_resource_short_name
@@ -110,7 +111,7 @@ class LucidDiagramGenerator:
             logger.error("Diagram generation failed", error=str(e))
             raise DiagramGenerationError(f"Failed to generate diagram: {e}") from e
 
-    def _generate_shapes(self, resources: List[Dict[str, Any]]) -> Dict[str, LucidShape]:
+    def _generate_shapes(self, resources: list[dict[str, Any]]) -> dict[str, LucidShape]:
         """
         Generate Lucid shapes from resources.
 
@@ -136,7 +137,7 @@ class LucidDiagramGenerator:
 
         group_index = 0
 
-        for group_name, group_resources in grouped.items():
+        for _group_name, group_resources in grouped.items():
             for i, resource in enumerate(group_resources):
                 # Calculate position
                 row = i // 5
@@ -184,14 +185,14 @@ class LucidDiagramGenerator:
 
     def _generate_lines(
         self,
-        relationships: List[Dict[str, Any]],
-        shapes: Dict[str, LucidShape],
-    ) -> List[LucidLine]:
+        relationships: list[ResourceRelationship],
+        shapes: dict[str, LucidShape],
+    ) -> list[LucidLine]:
         """
         Generate Lucid connector lines from relationships.
 
         Args:
-            relationships: List of relationship dictionaries
+            relationships: List of ResourceRelationship objects
             shapes: Dictionary of shapes
 
         Returns:
@@ -200,9 +201,9 @@ class LucidDiagramGenerator:
         lines = []
 
         for relationship in relationships:
-            source_id = relationship.get("source_id")
-            target_id = relationship.get("target_id")
-            rel_type = relationship.get("relationship_type", "generic_dependency")
+            source_id = relationship.source_id
+            target_id = relationship.target_id
+            rel_type = relationship.relationship_type
 
             # Skip if shapes don't exist
             if source_id not in shapes or target_id not in shapes:
@@ -222,7 +223,7 @@ class LucidDiagramGenerator:
         logger.info("Generated connector lines", count=len(lines))
         return lines
 
-    def _group_resources_by_source(self, resources: List[Dict[str, Any]]) -> Dict[str, List[Dict]]:
+    def _group_resources_by_source(self, resources: list[dict[str, Any]]) -> dict[str, list[dict]]:
         """
         Group resources by their source (terraform, azure, f5xc).
 
@@ -232,7 +233,7 @@ class LucidDiagramGenerator:
         Returns:
             Dictionary mapping source to resources
         """
-        groups = {
+        groups: dict[str, list[Any]] = {
             "terraform": [],
             "azure": [],
             "f5xc": [],
@@ -246,8 +247,8 @@ class LucidDiagramGenerator:
         return groups
 
     def _build_document_data(
-        self, shapes: Dict[str, LucidShape], lines: List[LucidLine]
-    ) -> Dict[str, Any]:
+        self, shapes: dict[str, LucidShape], lines: list[LucidLine]
+    ) -> dict[str, Any]:
         """
         Build Lucidchart document data structure.
 
@@ -300,7 +301,7 @@ class LucidDiagramGenerator:
         }
 
         # Build document
-        document_data = {
+        document_data: dict[str, Any] = {
             "title": self.title,
             "pages": [page],
         }
@@ -310,7 +311,7 @@ class LucidDiagramGenerator:
 
         return document_data
 
-    def _upload_document(self, document_data: Dict[str, Any]) -> LucidDocument:
+    def _upload_document(self, document_data: dict[str, Any]) -> LucidDocument:
         """
         Upload document to Lucidchart.
 
