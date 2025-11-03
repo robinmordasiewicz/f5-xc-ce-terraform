@@ -102,13 +102,15 @@ class TerraformStateCollector:
             TerraformStateError: If terraform command fails
         """
         try:
-            result = subprocess.run(  # nosec B603 B607 - Controlled terraform execution with fixed args
-                ["terraform", "show", "-json"],
-                cwd=self.state_path,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=60,
+            result = (
+                subprocess.run(  # nosec B603 B607 - Controlled terraform execution with fixed args
+                    ["terraform", "show", "-json"],
+                    cwd=self.state_path,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=60,
+                )
             )
             return json.loads(result.stdout)
 

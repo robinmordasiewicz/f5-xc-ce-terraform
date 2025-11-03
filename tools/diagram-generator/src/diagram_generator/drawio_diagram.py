@@ -217,7 +217,8 @@ class DrawioDiagramGenerator:
         # Root element
         root = ET.SubElement(graph_model, "root")
         ET.SubElement(root, "mxCell", id="0")
-        ET.SubElement(root, "mxCell", id="1", parent="0")
+        cell_1 = ET.SubElement(root, "mxCell", id="1")
+        cell_1.set("parent", "0")
 
         # Generate shapes and get content height
         shapes, max_content_height = self._generate_shapes(root, correlated_resources.resources)
@@ -428,18 +429,18 @@ class DrawioDiagramGenerator:
             # VNet container (swimlane) - using dashed border style
             vnet_label = f"{vnet_name}\\n{vnet_data.get('address_space', '')}"
 
-            ET.SubElement(
+            vnet_cell = ET.SubElement(
                 root,
                 "mxCell",
                 id=vnet_id,
                 value=vnet_label,
                 style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=50;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=none;strokeColor=#0078D4;strokeWidth=2;fontSize=14;fontColor=#000000;dashed=1;dashPattern=5 5;",
                 vertex="1",
-                parent="1",
             )
+            vnet_cell.set("parent", "1")
 
             ET.SubElement(
-                root[-1],
+                vnet_cell,
                 "mxGeometry",
                 x=str(x_offset),
                 y=str(vnet_y),
@@ -486,18 +487,18 @@ class DrawioDiagramGenerator:
                 if cidr:
                     subnet_label += f"\\n{cidr}"
 
-                ET.SubElement(
+                subnet_cell = ET.SubElement(
                     root,
                     "mxCell",
                     id=subnet_id,
                     value=subnet_label,
                     style=subnet_style,
                     vertex="1",
-                    parent=vnet_id,
                 )
+                subnet_cell.set("parent", vnet_id)
 
                 ET.SubElement(
-                    root[-1],
+                    subnet_cell,
                     "mxGeometry",
                     x="20",
                     y=str(subnet_y),
@@ -524,19 +525,19 @@ class DrawioDiagramGenerator:
                     resource_label = self._format_resource_detail(resource)
                     resource_style = self._get_azure_resource_style(resource)
 
-                    ET.SubElement(
+                    resource_cell = ET.SubElement(
                         root,
                         "mxCell",
                         id=resource_id,
                         value=resource_label,
                         style=resource_style,
                         vertex="1",
-                        parent=subnet_id,
                     )
+                    resource_cell.set("parent", subnet_id)
 
                     # Use larger icon size for better visibility (Microsoft Learn style)
                     ET.SubElement(
-                        root[-1],
+                        resource_cell,
                         "mxGeometry",
                         x=str(resource_x),
                         y=str(resource_y),
@@ -572,18 +573,18 @@ class DrawioDiagramGenerator:
         group_height = 400
 
         # F5 XC container
-        ET.SubElement(
+        f5xc_cell = ET.SubElement(
             root,
             "mxCell",
             id=group_id,
             value="F5 Distributed Cloud",
             style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#50C878;strokeColor=#2E7D54;strokeWidth=2;fontSize=14;fontColor=#000000;",
             vertex="1",
-            parent="1",
         )
+        f5xc_cell.set("parent", "1")
 
         ET.SubElement(
-            root[-1],
+            f5xc_cell,
             "mxGeometry",
             x=str(x_offset),
             y="50",
@@ -602,18 +603,18 @@ class DrawioDiagramGenerator:
             resource_label = f"{resource.get('type', '')}\\n{resource.get('name', '')}"
             resource_style = self.AZURE_SHAPE_STYLES["f5xc_site"]
 
-            ET.SubElement(
+            resource_cell = ET.SubElement(
                 root,
                 "mxCell",
                 id=resource_id,
                 value=resource_label,
                 style=resource_style,
                 vertex="1",
-                parent=group_id,
             )
+            resource_cell.set("parent", group_id)
 
             ET.SubElement(
-                root[-1],
+                resource_cell,
                 "mxGeometry",
                 x=str(resource_x),
                 y=str(resource_y),
@@ -632,13 +633,16 @@ class DrawioDiagramGenerator:
     def _create_simple_group(
         self,
         root: ET.Element,
-        platform: str,
+        platform: ResourceSource | str,
         resources: list[Any],
         x_offset: int,
         cell_id: int,
     ) -> tuple[int, dict[str, str], int]:
         """
         Create simple resource group for other platforms.
+
+        Args:
+            platform: ResourceSource enum or display string like "Azure", "F5 XC"
 
         Returns:
             Tuple of (next_cell_id, shape_id_map, max_content_height)
@@ -651,18 +655,27 @@ class DrawioDiagramGenerator:
         group_width = 600
         group_height = 400
 
-        ET.SubElement(
+        # Convert display name to ResourceSource for color lookup
+        platform_enum = platform
+        if isinstance(platform, str):
+            platform_enum = {
+                "Azure": ResourceSource.AZURE,
+                "F5 XC": ResourceSource.F5XC,
+                "Terraform": ResourceSource.TERRAFORM,
+            }.get(platform, ResourceSource.TERRAFORM)
+
+        group_cell = ET.SubElement(
             root,
             "mxCell",
             id=group_id,
-            value=platform,
-            style=f"swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor={self.SOURCE_COLORS.get(platform, '#FFFFFF')};strokeColor=#000000;fontSize=14;fontColor=#000000;",
+            value=str(platform),  # Display name
+            style=f"swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor={self.SOURCE_COLORS.get(platform_enum, '#FFFFFF')};strokeColor=#000000;fontSize=14;fontColor=#000000;",
             vertex="1",
-            parent="1",
         )
+        group_cell.set("parent", "1")
 
         ET.SubElement(
-            root[-1],
+            group_cell,
             "mxGeometry",
             x=str(x_offset),
             y="50",
@@ -685,18 +698,18 @@ class DrawioDiagramGenerator:
             )
             resource_style = self._get_resource_style(resource)
 
-            ET.SubElement(
+            resource_cell = ET.SubElement(
                 root,
                 "mxCell",
                 id=resource_id,
                 value=resource_label,
                 style=resource_style,
                 vertex="1",
-                parent=group_id,
             )
+            resource_cell.set("parent", group_id)
 
             ET.SubElement(
-                root[-1],
+                resource_cell,
                 "mxGeometry",
                 x=str(resource_x),
                 y=str(resource_y),
@@ -731,18 +744,18 @@ class DrawioDiagramGenerator:
             )
             resource_style = self._get_resource_style(resource)
 
-            ET.SubElement(
+            resource_cell = ET.SubElement(
                 root,
                 "mxCell",
                 id=resource_id,
                 value=resource_label,
                 style=resource_style,
                 vertex="1",
-                parent="1",
             )
+            resource_cell.set("parent", "1")
 
             ET.SubElement(
-                root[-1],
+                resource_cell,
                 "mxGeometry",
                 x=str(x),
                 y=str(y),
@@ -945,10 +958,10 @@ class DrawioDiagramGenerator:
                 value=label,
                 style=style,
                 edge="1",
-                parent="1",
                 source=source_id,
                 target=target_id,
             )
+            edge_cell.set("parent", "1")
 
             # Create geometry with explicit points for arrow visibility
             geometry = ET.SubElement(
@@ -1787,18 +1800,18 @@ class DrawioDiagramGenerator:
         cloud_height = 100
         cloud_x = hub_vnet_x + (hub_vnet_width - cloud_width) // 2
 
-        ET.SubElement(
+        cloud_cell = ET.SubElement(
             root,
             "mxCell",
             id=cloud_id,
             value="Internet",
             style=self.AZURE_SHAPE_STYLES["internet_cloud"],
             vertex="1",
-            parent="1",
         )
+        cloud_cell.set("parent", "1")
 
         ET.SubElement(
-            root[-1],
+            cloud_cell,
             "mxGeometry",
             x=str(cloud_x),
             y="10",
@@ -1829,18 +1842,18 @@ class DrawioDiagramGenerator:
             indicator_id = str(cell_id)
             cell_id += 1
 
-            ET.SubElement(
+            indicator_cell = ET.SubElement(
                 root,
                 "mxCell",
                 id=indicator_id,
                 value=number,
                 style=self.AZURE_SHAPE_STYLES["sequence_number"],
                 vertex="1",
-                parent="1",
             )
+            indicator_cell.set("parent", "1")
 
             ET.SubElement(
-                root[-1],
+                indicator_cell,
                 "mxGeometry",
                 x=str(x),
                 y=str(y),
@@ -1869,18 +1882,18 @@ class DrawioDiagramGenerator:
         inbound_label_id = str(cell_id)
         cell_id += 1
 
-        ET.SubElement(
+        inbound_label_cell = ET.SubElement(
             root,
             "mxCell",
             id=inbound_label_id,
             value="━━━━ Inbound traffic",
             style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#0078D4;fontStyle=1;",
             vertex="1",
-            parent="1",
         )
+        inbound_label_cell.set("parent", "1")
 
         ET.SubElement(
-            root[-1],
+            inbound_label_cell,
             "mxGeometry",
             x="50",
             y=str(y_position),
@@ -1893,18 +1906,18 @@ class DrawioDiagramGenerator:
         return_label_id = str(cell_id)
         cell_id += 1
 
-        ET.SubElement(
+        return_label_cell = ET.SubElement(
             root,
             "mxCell",
             id=return_label_id,
             value="━━━━ Return traffic",
             style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#107C10;fontStyle=1;",
             vertex="1",
-            parent="1",
         )
+        return_label_cell.set("parent", "1")
 
         ET.SubElement(
-            root[-1],
+            return_label_cell,
             "mxGeometry",
             x="50",
             y=str(y_position + 35),
@@ -1938,18 +1951,18 @@ class DrawioDiagramGenerator:
         y_pos = y_position if y_position is not None else self.layout["page_height"] - 40
 
         # Microsoft Azure logo text
-        ET.SubElement(
+        branding_cell = ET.SubElement(
             root,
             "mxCell",
             id=branding_id,
             value="Microsoft Azure",
             style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#0078D4;fontStyle=1;",
             vertex="1",
-            parent="1",
         )
+        branding_cell.set("parent", "1")
 
         ET.SubElement(
-            root[-1],
+            branding_cell,
             "mxGeometry",
             x=str(self.layout["page_width"] - 200),
             y=str(y_pos),
@@ -1972,7 +1985,9 @@ class DrawioDiagramGenerator:
 
         # Pretty print XML
         xml_string = ET.tostring(diagram_xml, encoding="unicode")
-        dom = minidom.parseString(xml_string)  # nosec B318 - Parsing generated diagram XML, not user input
+        dom = minidom.parseString(
+            xml_string
+        )  # nosec B318 - Parsing generated diagram XML, not user input
         pretty_xml = dom.toprettyxml(indent="  ")
 
         # Write to file
