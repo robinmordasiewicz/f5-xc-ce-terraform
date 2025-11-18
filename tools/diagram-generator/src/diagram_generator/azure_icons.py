@@ -9,7 +9,7 @@ import base64
 import re
 import xml.etree.ElementTree as ET  # nosec B405 - Parsing trusted Azure icon SVG files
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from diagram_generator.utils import get_logger
 
@@ -198,7 +198,7 @@ class AzureIconConverter:
 
     def get_icon_for_resource(
         self, resource_type: str, base_style: Optional[str] = None
-    ) -> Optional[dict[str, any]]:
+    ) -> Optional[dict[str, Any]]:
         """
         Get icon data for Azure resource type.
 
@@ -223,6 +223,10 @@ class AzureIconConverter:
         }
 
 
+# Module-level singleton instance
+_azure_icon_converter_instance: AzureIconConverter | None = None
+
+
 def get_azure_icon_converter() -> AzureIconConverter:
     """
     Get singleton instance of Azure icon converter.
@@ -230,7 +234,8 @@ def get_azure_icon_converter() -> AzureIconConverter:
     Returns:
         AzureIconConverter instance
     """
-    if not hasattr(get_azure_icon_converter, "_instance"):
-        get_azure_icon_converter._instance = AzureIconConverter()
+    global _azure_icon_converter_instance
+    if _azure_icon_converter_instance is None:
+        _azure_icon_converter_instance = AzureIconConverter()
 
-    return get_azure_icon_converter._instance
+    return _azure_icon_converter_instance

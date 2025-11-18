@@ -25,7 +25,9 @@ class LucidAuthClient:
     """Handles Lucidchart OAuth 2.0 authentication."""
 
     AUTH_URL = "https://lucid.app/oauth2/authorize"
-    TOKEN_URL = "https://api.lucid.co/oauth2/token"  # nosec B105 - Public API endpoint URL, not password
+    TOKEN_URL = (
+        "https://api.lucid.co/oauth2/token"  # nosec B105 - Public API endpoint URL, not password
+    )
     TOKEN_CACHE_FILE = Path.home() / ".lucid_token_cache.json"
 
     def __init__(

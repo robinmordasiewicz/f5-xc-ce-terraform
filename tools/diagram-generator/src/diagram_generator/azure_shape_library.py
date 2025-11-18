@@ -181,6 +181,10 @@ class AzureShapeLibrary:
         return self.decompress_shape_xml(compressed_xml)
 
 
+# Module-level singleton instance
+_azure_shape_library_instance: AzureShapeLibrary | None = None
+
+
 def get_azure_shape_library() -> AzureShapeLibrary:
     """
     Get singleton instance of Azure shape library.
@@ -188,7 +192,8 @@ def get_azure_shape_library() -> AzureShapeLibrary:
     Returns:
         AzureShapeLibrary instance
     """
-    if not hasattr(get_azure_shape_library, "_instance"):
-        get_azure_shape_library._instance = AzureShapeLibrary()
+    global _azure_shape_library_instance
+    if _azure_shape_library_instance is None:
+        _azure_shape_library_instance = AzureShapeLibrary()
 
-    return get_azure_shape_library._instance
+    return _azure_shape_library_instance

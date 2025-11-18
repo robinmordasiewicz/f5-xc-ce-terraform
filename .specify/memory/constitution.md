@@ -1,30 +1,4 @@
-<!--
-Sync Impact Report:
-- Version change: 1.3.0 → 1.4.0
-- Modified principles:
-  * VI. AI Agent Compliance - EXPANDED with new subsection:
-    - NEW: Implicit Work Requests - Clarifies that error reports automatically trigger fix workflow
-    - Automatic Response Protocol: 8-step process for handling error reports
-    - Types of Implicit Work Requests: 6 categories that trigger automatic workflow
-    - Confirmation Required For: 5 scenarios where agent must ask before proceeding
-    - Rationale: Error reports are implicit fix requests, asking for confirmation adds unnecessary friction
-- Added sections:
-  * VI. AI Agent Compliance → Implicit Work Requests (NEW SUBSECTION)
-- Modified files:
-  * CLAUDE.md - UPDATED with implicit work requests section showing automatic workflow triggers
-- Removed sections: N/A
-- Templates requiring updates:
-  ✅ .specify/templates/plan-template.md - No changes required, remains compatible
-  ✅ .specify/templates/spec-template.md - No changes required, remains compatible
-  ✅ .specify/templates/tasks-template.md - No changes required, remains compatible
-  ✅ CLAUDE.md - UPDATED with implicit work request guidance in mandatory workflow section
-- Follow-up TODOs:
-  * Monitor agent behavior when users report errors to validate automatic workflow initiation
-  * Track compliance with new implicit work request protocol in future sessions
-  * Refine confirmation criteria based on real-world usage patterns
--->
 
-# F5 XC CE Terraform Constitution
 
 ## Core Principles
 
