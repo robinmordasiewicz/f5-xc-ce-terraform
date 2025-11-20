@@ -75,10 +75,15 @@ variable "f5_xc_tenant" {
 }
 
 # CE Configuration
-variable "ce_vm_size" {
-  description = "Azure VM size for CE instances (minimum Standard_D8s_v3)"
+variable "ce_site_size" {
+  description = "F5 XC CE site size - determines Azure VM SKU and resource allocation (medium: 8 vCPUs/32GB RAM, large: 16 vCPUs/64GB RAM)"
   type        = string
-  default     = "Standard_D8s_v3"
+  default     = "medium"
+
+  validation {
+    condition     = contains(["medium", "large"], var.ce_site_size)
+    error_message = "CE site size must be 'medium' or 'large'. Reference: https://docs.cloud.f5.com/docs-v2/multi-cloud-network-connect/reference/ce-site-size-ref"
+  }
 }
 
 variable "ssh_public_key" {

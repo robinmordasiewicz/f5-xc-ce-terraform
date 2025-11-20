@@ -56,7 +56,7 @@ func TestCERegistration(t *testing.T) {
 			"location":            "eastus",
 			"ce_instance_name":    "test-ce",
 			"subnet_id":           "/subscriptions/test/resourceGroups/test-rg/providers/Microsoft.Network/virtualNetworks/test-vnet/subnets/nva-subnet",
-			"vm_size":             "Standard_D8s_v3",
+			"vm_size":             "Standard_D8_v4",
 			"registration_token":  "test-registration-token",
 		},
 		NoColor: true,
@@ -171,7 +171,7 @@ func TestEndToEndDeployment(t *testing.T) {
 			"resource_group_name":    "xc-ce-test-rg",
 			"hub_vnet_address_space": []string{"10.0.0.0/16"},
 			"spoke_vnet_address_space": []string{"10.1.0.0/16"},
-			"ce_vm_size":             "Standard_D8s_v3",
+			"ce_site_size":           "medium",
 			"tags": map[string]string{
 				"environment": "test",
 				"managed_by":  "terraform",

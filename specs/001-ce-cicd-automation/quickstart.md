@@ -242,7 +242,7 @@ spoke_workload_subnet_prefix = "10.1.1.0/24"
 spoke_service_subnet_prefix = "10.1.2.0/27"
 
 # CE Configuration
-ce_vm_size = "Standard_D8s_v5"
+ce_site_size = "medium"
 ce_os_disk_size_gb = 80
 ce_admin_password = "ComplexP@ssw0rd123!"  # Change this!
 

@@ -70,9 +70,9 @@ f5_xc_namespace = "system"
 # CE VM Configuration
 # -------------------
 
-# VM size for CE instances (minimum: Standard_D8s_v3 = 8 vCPUs, 32 GB RAM)
-# See: https://docs.cloud.f5.com/docs/how-to/site-management/create-azure-site#azure-certified-hardware
-ce_vm_size = "Standard_D8s_v3"
+# CE site size (medium: 8 vCPUs/32GB RAM, large: 16 vCPUs/64GB RAM)
+# See: https://docs.cloud.f5.com/docs-v2/multi-cloud-network-connect/reference/ce-site-size-ref
+ce_site_size = "medium"
 
 # SSH public key for CE VM access (REQUIRED)
 # Generate with: ssh-keygen -t rsa -b 4096 -f ~/.ssh/ce-azure-key

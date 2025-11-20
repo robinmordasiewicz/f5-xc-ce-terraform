@@ -52,7 +52,7 @@ resource "null_resource" "infrastructure_diagram" {
     peering_status      = jsonencode(module.spoke_vnet.peering_status)
 
     # Configuration changes
-    ce_vm_size   = var.ce_vm_size
+    ce_vm_size   = local.ce_vm_size
     azure_region = var.azure_region
 
     # Force regeneration on timestamp (optional - comment out for only real changes)
