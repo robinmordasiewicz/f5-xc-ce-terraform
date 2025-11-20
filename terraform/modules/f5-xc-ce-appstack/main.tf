@@ -140,7 +140,7 @@ resource "azurerm_linux_virtual_machine" "ce" {
   os_disk {
     name                 = "${var.vm_name}-osdisk"
     caching              = "ReadWrite"
-    storage_account_type = "Premium_LRS"
+    storage_account_type = "StandardSSD_LRS" # Standard SSD per F5 XC documentation
     disk_size_gb         = 80
   }
 
