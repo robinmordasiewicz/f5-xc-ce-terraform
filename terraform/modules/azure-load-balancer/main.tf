@@ -13,7 +13,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.80"
+      version = "~> 4.54"
     }
   }
 }
@@ -72,7 +72,7 @@ resource "azurerm_lb_rule" "https" {
   frontend_ip_configuration_name = "LoadBalancerFrontEnd"
   backend_address_pool_ids       = [azurerm_lb_backend_address_pool.ce_pool.id]
   probe_id                       = azurerm_lb_probe.ce_tcp.id
-  enable_floating_ip             = false
+  floating_ip_enabled            = false
   idle_timeout_in_minutes        = 4
   load_distribution              = "SourceIPProtocol" # Session affinity
 }
@@ -87,7 +87,7 @@ resource "azurerm_lb_rule" "http" {
   frontend_ip_configuration_name = "LoadBalancerFrontEnd"
   backend_address_pool_ids       = [azurerm_lb_backend_address_pool.ce_pool.id]
   probe_id                       = azurerm_lb_probe.ce_tcp.id
-  enable_floating_ip             = false
+  floating_ip_enabled            = false
   idle_timeout_in_minutes        = 4
   load_distribution              = "SourceIPProtocol"
 }
