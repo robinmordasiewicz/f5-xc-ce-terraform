@@ -19,7 +19,7 @@ terraform {
 
     azuread = {
       source  = "hashicorp/azuread"
-      version = "~> 2.45"
+      version = "~> 3.7"
     }
 
     volterra = {
