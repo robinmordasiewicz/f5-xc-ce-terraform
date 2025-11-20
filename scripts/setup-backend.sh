@@ -142,6 +142,7 @@ export VES_P12_PASSWORD="$VES_P12_PASSWORD"
 export TF_VAR_f5_xc_tenant="$F5_XC_TENANT"
 
 # Azure Deployment Configuration
+export ARM_SUBSCRIPTION_ID="$SUBSCRIPTION_ID"
 export TF_VAR_resource_group_name="$RESOURCE_GROUP"
 
 # Alternative: Certificate and Key File Authentication
@@ -181,6 +182,7 @@ export TF_VAR_f5_xc_tenant="$F5_XC_TENANT"
 export TF_VAR_f5_xc_api_token="$F5_XC_API_TOKEN"
 
 # Azure Deployment Configuration
+export ARM_SUBSCRIPTION_ID="$SUBSCRIPTION_ID"
 export TF_VAR_resource_group_name="$RESOURCE_GROUP"
 
 # WARNING: The Terraform provider does NOT support API tokens!
