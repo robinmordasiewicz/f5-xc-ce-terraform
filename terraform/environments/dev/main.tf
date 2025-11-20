@@ -34,6 +34,15 @@ resource "tls_private_key" "ce_ssh" {
 locals {
   ssh_public_key = var.ssh_public_key != "" ? var.ssh_public_key : tls_private_key.ce_ssh[0].public_key_openssh
 
+  # F5 XC CE site size to Azure VM SKU mapping
+  # Reference: https://docs.cloud.f5.com/docs-v2/multi-cloud-network-connect/reference/ce-site-size-ref
+  ce_vm_size_map = {
+    medium = "Standard_D8_v4"  # 8 vCPUs, 32 GB RAM
+    large  = "Standard_D16_v4" # 16 vCPUs, 64 GB RAM
+  }
+
+  ce_vm_size = local.ce_vm_size_map[var.ce_site_size]
+
   # Identity information for F5 XC site labels and naming
   github_user = "robinmordasiewicz"
   github_repo = "f5-xc-ce-terraform"
@@ -127,7 +136,7 @@ module "ce_appstack_1" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   vm_name             = "${var.prefix}-vm-01" # f5-xc-ce-vm-01
-  vm_size             = var.ce_vm_size
+  vm_size             = local.ce_vm_size
   subnet_id           = module.hub_vnet.nva_subnet_id
   registration_token  = module.f5_xc_registration.registration_token
   ssh_public_key      = local.ssh_public_key
@@ -149,7 +158,7 @@ module "ce_appstack_2" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   vm_name             = "${var.prefix}-vm-02" # f5-xc-ce-vm-02
-  vm_size             = var.ce_vm_size
+  vm_size             = local.ce_vm_size
   subnet_id           = module.hub_vnet.nva_subnet_id
   registration_token  = module.f5_xc_registration.registration_token
   ssh_public_key      = local.ssh_public_key

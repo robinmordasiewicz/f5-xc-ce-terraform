@@ -181,7 +181,7 @@ F5 Distributed Cloud Customer Edge running as Secure Mesh Site in hub VNET, prov
 | Attribute | Type | Required | Description | Validation |
 |-----------|------|----------|-------------|------------|
 | name | string | Yes | CE instance name | Must be unique in F5 XC tenant |
-| vm_size | string | Yes | Azure VM SKU | Minimum: `Standard_D8s_v5` (8 vCPUs, 32 GB RAM) |
+| vm_size | string | Yes | Azure VM SKU | Mapped from ce_site_size: medium=`Standard_D8_v4`, large=`Standard_D16_v4` |
 | os_disk_size_gb | number | Yes | OS disk size | Minimum: 80 GB |
 | sli_subnet_id | string | Yes | Subnet for inside interface (SLI) | Must be in NVA subnet |
 | slo_subnet_id | string | Yes | Subnet for outside interface (SLO) | Can be same as SLI or separate |
@@ -284,7 +284,7 @@ F5 Distributed Cloud Customer Edge running Managed Kubernetes in spoke VNET for 
 | Attribute | Type | Required | Description | Validation |
 |-----------|------|----------|-------------|------------|
 | name | string | Yes | CE K8s cluster name | Must be unique in F5 XC tenant |
-| vm_size | string | Yes | Azure VM SKU | Minimum: `Standard_D8s_v5` (8 vCPUs, 32 GB RAM) |
+| vm_size | string | Yes | Azure VM SKU | Mapped from ce_site_size: medium=`Standard_D8_v4`, large=`Standard_D16_v4` |
 | os_disk_size_gb | number | Yes | OS disk size | Minimum: 80 GB, recommend 100+ for K8s |
 | node_subnet_id | string | Yes | Subnet for K8s nodes | Must be in spoke workload subnet |
 | registration_token | string | Yes | F5 XC registration token | Sensitive, from volterra provider |
