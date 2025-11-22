@@ -49,9 +49,9 @@ variable "availability_zone" {
 }
 
 variable "enable_accelerated_networking" {
-  description = "Enable accelerated networking for better performance"
+  description = "Enable accelerated networking. NOTE: Must be false for F5 XC CE VMs - accelerated networking creates bonded interfaces that fail VPM certified hardware check"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "admin_username" {
