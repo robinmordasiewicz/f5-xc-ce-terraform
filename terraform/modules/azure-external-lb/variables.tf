@@ -1,4 +1,4 @@
-# Variables for Azure Internal Load Balancer Module
+# Variables for Azure External Load Balancer Module
 
 variable "resource_group_name" {
   description = "Name of the Azure resource group"
@@ -11,18 +11,14 @@ variable "location" {
 }
 
 variable "lb_name" {
-  description = "Name of the internal load balancer"
+  description = "Name of the external load balancer"
   type        = string
 }
 
-variable "subnet_id" {
-  description = "ID of the internal subnet for frontend IP"
-  type        = string
-}
-
-variable "frontend_ip_address" {
-  description = "Static private IP address for load balancer frontend"
-  type        = string
+variable "availability_zones" {
+  description = "Availability zones for the public IP (zone-redundant)"
+  type        = list(string)
+  default     = ["1", "2", "3"]
 }
 
 variable "health_probe_port" {

@@ -24,16 +24,27 @@ variable "hub_vnet_address_space" {
   default     = ["10.0.0.0/16"]
 }
 
-variable "hub_nva_subnet_prefix" {
-  description = "Address prefix for NVA subnet (minimum /26)"
+# 3-Subnet Hub Architecture:
+# - Management: RE tunnel, SSH, F5 XC console communication
+# - External: External LB backend for public ingress traffic
+# - Internal: Internal LB backend for spoke VNET routing
+
+variable "hub_mgmt_subnet_prefix" {
+  description = "Address prefix for management subnet (RE tunnel, SSH, F5 XC console)"
   type        = string
   default     = "10.0.1.0/26"
 }
 
-variable "hub_mgmt_subnet_prefix" {
-  description = "Address prefix for management subnet"
+variable "hub_external_subnet_prefix" {
+  description = "Address prefix for external subnet (External LB backend)"
   type        = string
-  default     = "10.0.2.0/24"
+  default     = "10.0.2.0/26"
+}
+
+variable "hub_internal_subnet_prefix" {
+  description = "Address prefix for internal subnet (Internal LB backend, spoke routing)"
+  type        = string
+  default     = "10.0.3.0/26"
 }
 
 # Spoke VNET Configuration
@@ -49,17 +60,17 @@ variable "spoke_workload_subnet_prefix" {
   default     = "10.1.1.0/24"
 }
 
-# Load Balancer Configuration
-variable "lb_frontend_ip" {
-  description = "Static frontend IP for internal load balancer"
+# Internal Load Balancer Configuration (for spoke routing)
+variable "internal_lb_frontend_ip" {
+  description = "Static frontend IP for internal load balancer (must be in internal subnet)"
   type        = string
-  default     = "10.0.1.4"
+  default     = "10.0.3.4"
 }
 
 variable "hub_nva_ip" {
-  description = "IP address of hub NVA (for spoke routing)"
+  description = "IP address of hub NVA (for spoke routing - points to internal LB)"
   type        = string
-  default     = "10.0.1.4"
+  default     = "10.0.3.4"
 }
 
 # F5 XC Configuration

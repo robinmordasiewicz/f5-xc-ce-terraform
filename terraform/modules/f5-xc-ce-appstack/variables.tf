@@ -1,4 +1,4 @@
-# Variables for F5 XC CE AppStack Module
+# Variables for F5 XC CE AppStack Module (3-NIC Architecture)
 
 variable "resource_group_name" {
   description = "Name of the Azure resource group"
@@ -21,8 +21,19 @@ variable "vm_size" {
   default     = "Standard_D8s_v3"
 }
 
-variable "subnet_id" {
-  description = "ID of the subnet for CE deployment"
+# Subnet IDs for 3-NIC configuration
+variable "mgmt_subnet_id" {
+  description = "ID of the management subnet (for RE tunnel, SSH, F5 XC console)"
+  type        = string
+}
+
+variable "external_subnet_id" {
+  description = "ID of the external subnet (for External LB backend)"
+  type        = string
+}
+
+variable "internal_subnet_id" {
+  description = "ID of the internal subnet (for Internal LB backend)"
   type        = string
 }
 
@@ -32,13 +43,24 @@ variable "registration_token" {
   sensitive   = true
 }
 
+variable "site_name" {
+  description = "F5 XC site name - unique per CE for independent vsites"
+  type        = string
+}
+
 variable "ssh_public_key" {
   description = "SSH public key for CE access"
   type        = string
 }
 
-variable "lb_backend_pool_id" {
-  description = "ID of the load balancer backend pool"
+# Load Balancer backend pool IDs
+variable "external_lb_backend_pool_id" {
+  description = "ID of the external load balancer backend pool"
+  type        = string
+}
+
+variable "internal_lb_backend_pool_id" {
+  description = "ID of the internal load balancer backend pool"
   type        = string
 }
 

@@ -39,12 +39,14 @@ resource "null_resource" "infrastructure_diagram" {
   # Triggers - regenerate diagram when any of these change
   triggers = {
     # Infrastructure changes
-    hub_vnet_id      = module.hub_vnet.vnet_id
-    spoke_vnet_id    = module.spoke_vnet.vnet_id
-    load_balancer_id = module.load_balancer.lb_id
-    ce_vm_1_id       = module.ce_appstack_1.vm_id
-    ce_vm_2_id       = module.ce_appstack_2.vm_id
-    f5xc_site_id     = module.f5_xc_registration.site_id
+    hub_vnet_id    = module.hub_vnet.vnet_id
+    spoke_vnet_id  = module.spoke_vnet.vnet_id
+    external_lb_id = module.external_lb.lb_id
+    internal_lb_id = module.internal_lb.lb_id
+    ce_vm_1_id     = module.ce_appstack_1.vm_id
+    ce_vm_2_id     = module.ce_appstack_2.vm_id
+    f5xc_site_1_id = module.f5_xc_registration_1.site_id
+    f5xc_site_2_id = module.f5_xc_registration_2.site_id
 
     # Network topology changes
     hub_address_space   = jsonencode(var.hub_vnet_address_space)
@@ -156,10 +158,12 @@ resource "null_resource" "infrastructure_diagram" {
   depends_on = [
     module.hub_vnet,
     module.spoke_vnet,
-    module.load_balancer,
+    module.external_lb,
+    module.internal_lb,
     module.ce_appstack_1,
     module.ce_appstack_2,
-    module.f5_xc_registration
+    module.f5_xc_registration_1,
+    module.f5_xc_registration_2
   ]
 }
 
@@ -176,6 +180,7 @@ output "diagram_generation_triggers" {
     hub_vnet       = module.hub_vnet.vnet_name
     spoke_vnet     = module.spoke_vnet.vnet_name
     ce_instances   = [module.ce_appstack_1.vm_name, module.ce_appstack_2.vm_name]
-    f5xc_site      = module.f5_xc_registration.site_name
+    f5xc_site_1    = module.f5_xc_registration_1.site_name
+    f5xc_site_2    = module.f5_xc_registration_2.site_name
   } : null
 }
