@@ -1,21 +1,26 @@
-# F5 XC CE AppStack Module
+# F5 XC CE AppStack Module (3-NIC Architecture)
 #
 # Deploys F5 XC Customer Edge (CE) AppStack instance as Network Virtual Appliance (NVA)
-# in hub VNET. CE provides secure connectivity, traffic inspection, and application services.
+# in hub VNET with 3 NICs for management, external, and internal traffic separation.
+#
+# NIC Configuration:
+# - Management NIC: RE tunnel, SSH, F5 XC Console (with public IP) - Primary NIC
+# - External NIC: External LB backend pool for inbound public traffic
+# - Internal NIC: Internal LB backend pool for spoke VNET routing
 #
 # Resources Created:
-# - Public IP (for management access and F5 XC Console communication)
-# - Network Interface with IP forwarding enabled
+# - Public IP for management access
+# - 3 Network Interfaces with IP forwarding enabled
 # - Virtual Machine with F5 XC CE Ubuntu image
 # - Cloud-init configuration with registration token
 # - Managed identity for Azure integration
-# - Load balancer backend pool association
+# - Load balancer backend pool associations
 # - Boot diagnostics for troubleshooting
 #
 # Prerequisites:
 # - F5 XC registration token from registration module
-# - Load balancer backend pool created
-# - Subnet for CE deployment exists
+# - External and Internal load balancer backend pools created
+# - Management, External, and Internal subnets exist
 
 terraform {
   required_providers {
@@ -26,7 +31,7 @@ terraform {
   }
 }
 
-# T053: Public IP for Management Access
+# Public IP for Management Access
 resource "azurerm_public_ip" "ce_mgmt" {
   name                = "${var.vm_name}-mgmt-pip"
   location            = var.location
@@ -38,7 +43,7 @@ resource "azurerm_public_ip" "ce_mgmt" {
   tags = var.tags
 }
 
-# T058: Managed Identity for CE VM
+# Managed Identity for CE VM
 resource "azurerm_user_assigned_identity" "ce" {
   name                = "${var.vm_name}-identity"
   location            = var.location
@@ -47,9 +52,45 @@ resource "azurerm_user_assigned_identity" "ce" {
   tags = var.tags
 }
 
-# T052: Network Interface with IP Forwarding
-resource "azurerm_network_interface" "ce" {
-  name                           = "${var.vm_name}-nic"
+# Management NIC - RE tunnel, SSH, F5 XC Console (Primary NIC with Public IP)
+resource "azurerm_network_interface" "ce_mgmt" {
+  name                           = "${var.vm_name}-mgmt-nic"
+  location                       = var.location
+  resource_group_name            = var.resource_group_name
+  ip_forwarding_enabled          = true # Required for NVA functionality
+  accelerated_networking_enabled = var.enable_accelerated_networking
+
+  ip_configuration {
+    name                          = "mgmt"
+    subnet_id                     = var.mgmt_subnet_id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.ce_mgmt.id
+    primary                       = true
+  }
+
+  tags = var.tags
+}
+
+# External NIC - External LB backend (Public traffic ingress)
+resource "azurerm_network_interface" "ce_external" {
+  name                           = "${var.vm_name}-external-nic"
+  location                       = var.location
+  resource_group_name            = var.resource_group_name
+  ip_forwarding_enabled          = true # Required for NVA functionality
+  accelerated_networking_enabled = var.enable_accelerated_networking
+
+  ip_configuration {
+    name                          = "external"
+    subnet_id                     = var.external_subnet_id
+    private_ip_address_allocation = "Dynamic"
+  }
+
+  tags = var.tags
+}
+
+# Internal NIC - Internal LB backend (Spoke VNET routing)
+resource "azurerm_network_interface" "ce_internal" {
+  name                           = "${var.vm_name}-internal-nic"
   location                       = var.location
   resource_group_name            = var.resource_group_name
   ip_forwarding_enabled          = true # Required for NVA functionality
@@ -57,22 +98,30 @@ resource "azurerm_network_interface" "ce" {
 
   ip_configuration {
     name                          = "internal"
-    subnet_id                     = var.subnet_id
+    subnet_id                     = var.internal_subnet_id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.ce_mgmt.id
   }
 
   tags = var.tags
 }
 
-# T061: Associate NIC with Load Balancer Backend Pool
-resource "azurerm_network_interface_backend_address_pool_association" "ce" {
-  network_interface_id    = azurerm_network_interface.ce.id
-  ip_configuration_name   = "internal"
-  backend_address_pool_id = var.lb_backend_pool_id
+# Associate External NIC with External Load Balancer Backend Pool
+resource "azurerm_network_interface_backend_address_pool_association" "ce_external" {
+  network_interface_id    = azurerm_network_interface.ce_external.id
+  ip_configuration_name   = "external"
+  backend_address_pool_id = var.external_lb_backend_pool_id
 }
 
-# T056: Cloud-init Configuration with Registration Token
+# Associate Internal NIC with Internal Load Balancer Backend Pool
+resource "azurerm_network_interface_backend_address_pool_association" "ce_internal" {
+  network_interface_id    = azurerm_network_interface.ce_internal.id
+  ip_configuration_name   = "internal"
+  backend_address_pool_id = var.internal_lb_backend_pool_id
+}
+
+# Cloud-init Configuration with Registration Token
+# Per F5 DevCentral best practices, cloud-init writes directly to /etc/vpm/config.yaml
+# with full VPM configuration including CertifiedHardwareEndpoint for Azure
 data "cloudinit_config" "ce_config" {
   gzip          = true
   base64_encode = true
@@ -82,31 +131,45 @@ data "cloudinit_config" "ce_config" {
     content = yamlencode({
       write_files = [
         {
-          path        = "/etc/vpm/user_data"
+          path        = "/etc/hosts"
           permissions = "0644"
           owner       = "root:root"
-          encoding    = "b64"
-          content = base64encode(jsonencode({
-            token                 = var.registration_token
-            cluster_name          = var.vm_name
-            maurice_endpoint      = "https://register.ves.volterra.io/register"
-            maurice_mtls_endpoint = "https://register-tls.ves.volterra.io/register"
-            latitude              = 0.0
-            longitude             = 0.0
-          }))
+          content     = "127.0.0.1 localhost\n127.0.0.1 vip\n"
+        },
+        {
+          path        = "/etc/vpm/config.yaml"
+          permissions = "0644"
+          owner       = "root:root"
+          content = yamlencode({
+            Vpm = {
+              ClusterType               = "ce"
+              ClusterName               = var.site_name
+              Token                     = var.registration_token
+              MauricePrivateEndpoint    = "https://register-tls.ves.volterra.io"
+              MauriceEndpoint           = "https://register.ves.volterra.io"
+              CertifiedHardwareEndpoint = "https://vesio.blob.core.windows.net/releases/certified-hardware/azure.yml"
+              Latitude                  = 0.0
+              Longitude                 = 0.0
+            }
+            Kubernetes = {
+              EtcdUseTLS    = true
+              Server        = "vip"
+              CloudProvider = "disabled"
+            }
+          })
         }
       ]
     })
   }
 }
 
-# T051, T054, T055, T057, T059, T060, T063: CE Virtual Machine
+# CE Virtual Machine with 3 NICs
 resource "azurerm_linux_virtual_machine" "ce" {
   name                = var.vm_name
   location            = var.location
   resource_group_name = var.resource_group_name
-  size                = var.vm_size           # T057: Standard_D8s_v3 (8 vCPUs, 32 GB RAM)
-  zone                = var.availability_zone # T060
+  size                = var.vm_size # Standard_D8s_v3 (8 vCPUs, 32 GB RAM)
+  zone                = var.availability_zone
 
   # Admin configuration
   admin_username                  = var.admin_username
@@ -117,12 +180,15 @@ resource "azurerm_linux_virtual_machine" "ce" {
     public_key = var.ssh_public_key
   }
 
-  # Network interface
+  # Network interfaces - Management NIC MUST be first (primary)
+  # Order matters: Azure uses first NIC as primary
   network_interface_ids = [
-    azurerm_network_interface.ce.id,
+    azurerm_network_interface.ce_mgmt.id,     # Primary - Management
+    azurerm_network_interface.ce_external.id, # Secondary - External LB
+    azurerm_network_interface.ce_internal.id, # Tertiary - Internal LB
   ]
 
-  # T055: F5 XC CE Ubuntu Image
+  # F5 XC CE Ubuntu Image
   source_image_reference {
     publisher = "volterraedgeservices"
     offer     = "volterra-node"
@@ -136,7 +202,7 @@ resource "azurerm_linux_virtual_machine" "ce" {
     publisher = "volterraedgeservices"
   }
 
-  # T054: OS Disk Configuration
+  # OS Disk Configuration
   os_disk {
     name                 = "${var.vm_name}-osdisk"
     caching              = "ReadWrite"
@@ -144,10 +210,10 @@ resource "azurerm_linux_virtual_machine" "ce" {
     disk_size_gb         = 80
   }
 
-  # T056: Cloud-init with registration token
+  # Cloud-init with registration token
   custom_data = data.cloudinit_config.ce_config.rendered
 
-  # T058: Managed Identity
+  # Managed Identity
   identity {
     type = "UserAssigned"
     identity_ids = [
@@ -155,12 +221,12 @@ resource "azurerm_linux_virtual_machine" "ce" {
     ]
   }
 
-  # T059: Boot Diagnostics
+  # Boot Diagnostics
   boot_diagnostics {
     storage_account_uri = null # Use managed storage account
   }
 
-  # T063: Tags and Metadata
+  # Tags and Metadata
   tags = merge(
     var.tags,
     {

@@ -1,13 +1,13 @@
-# Azure Load Balancer Module
+# Azure Internal Load Balancer Module
 #
 # Internal load balancer for F5 XC CE NVA high availability (active/active).
-# Provides HA for CE AppStack instances with health probes and load balancing rules.
+# Routes spoke VNET traffic to CE internal NICs for NVA routing.
 #
 # Resources Created:
-# - Internal load balancer
-# - Backend address pool
-# - Health probes (TCP 65500, HTTPS 65443)
-# - Load balancing rules (HTTP:80, HTTPS:443)
+# - Internal Standard SKU load balancer
+# - Backend address pool for CE internal NICs
+# - Health probes (TCP)
+# - HA Ports rule (all ports/protocols for NVA routing)
 
 terraform {
   required_providers {
@@ -18,7 +18,7 @@ terraform {
   }
 }
 
-# T041: Internal Load Balancer
+# Internal Load Balancer for spoke routing
 resource "azurerm_lb" "internal" {
   name                = var.lb_name
   location            = var.location
@@ -26,7 +26,7 @@ resource "azurerm_lb" "internal" {
   sku                 = "Standard" # Standard SKU required for HA ports
 
   frontend_ip_configuration {
-    name                          = "LoadBalancerFrontEnd"
+    name                          = "internal-frontend"
     subnet_id                     = var.subnet_id
     private_ip_address_allocation = "Static"
     private_ip_address            = var.frontend_ip_address
@@ -35,67 +35,34 @@ resource "azurerm_lb" "internal" {
   tags = var.tags
 }
 
-# T042: Backend Address Pool
-resource "azurerm_lb_backend_address_pool" "ce_pool" {
+# Backend Address Pool for CE Internal NICs
+resource "azurerm_lb_backend_address_pool" "internal" {
   loadbalancer_id = azurerm_lb.internal.id
-  name            = var.backend_pool_name
+  name            = "ce-internal-backend-pool"
 }
 
-# T043: Health Probe - TCP 65500 (CE control plane health check)
-resource "azurerm_lb_probe" "ce_tcp" {
+# Health Probe - TCP (for HA ports)
+resource "azurerm_lb_probe" "tcp" {
   loadbalancer_id     = azurerm_lb.internal.id
-  name                = "ce-health-probe-tcp"
+  name                = "internal-health-probe-tcp"
   protocol            = "Tcp"
-  port                = 65500
-  interval_in_seconds = 5
-  number_of_probes    = 2
+  port                = var.health_probe_port
+  interval_in_seconds = var.health_probe_interval
+  number_of_probes    = var.health_probe_threshold
 }
 
-# Health Probe - HTTPS 65443 (CE HTTPS health check)
-resource "azurerm_lb_probe" "ce_https" {
-  loadbalancer_id     = azurerm_lb.internal.id
-  name                = "ce-health-probe-https"
-  protocol            = "Https"
-  port                = 65443
-  request_path        = "/"
-  interval_in_seconds = 5
-  number_of_probes    = 2
-}
-
-# T044: Load Balancing Rule for HTTPS (443)
-resource "azurerm_lb_rule" "https" {
+# HA Ports Rule - All protocols, all ports (required for NVA routing)
+# This allows the internal LB to route ANY traffic from spoke VNETs through the CEs
+resource "azurerm_lb_rule" "ha_ports" {
   loadbalancer_id                = azurerm_lb.internal.id
-  name                           = "LBRuleHTTPS"
-  protocol                       = "Tcp"
-  frontend_port                  = 443
-  backend_port                   = 443
-  frontend_ip_configuration_name = "LoadBalancerFrontEnd"
-  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.ce_pool.id]
-  probe_id                       = azurerm_lb_probe.ce_tcp.id
-  floating_ip_enabled            = false
+  name                           = "HAPortsRule"
+  protocol                       = "All"
+  frontend_port                  = 0 # HA Ports - all ports
+  backend_port                   = 0 # HA Ports - all ports
+  frontend_ip_configuration_name = "internal-frontend"
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.internal.id]
+  probe_id                       = azurerm_lb_probe.tcp.id
+  enable_floating_ip             = true # Required for NVA/transparent proxy scenarios
   idle_timeout_in_minutes        = 4
-  load_distribution              = "SourceIPProtocol" # Session affinity
+  load_distribution              = "SourceIPProtocol" # Session affinity for stateful flows
 }
-
-# Load Balancing Rule for HTTP (80)
-resource "azurerm_lb_rule" "http" {
-  loadbalancer_id                = azurerm_lb.internal.id
-  name                           = "LBRuleHTTP"
-  protocol                       = "Tcp"
-  frontend_port                  = 80
-  backend_port                   = 80
-  frontend_ip_configuration_name = "LoadBalancerFrontEnd"
-  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.ce_pool.id]
-  probe_id                       = azurerm_lb_probe.ce_tcp.id
-  floating_ip_enabled            = false
-  idle_timeout_in_minutes        = 4
-  load_distribution              = "SourceIPProtocol"
-}
-
-# NOTE: HA Ports rule removed due to Azure constraint
-# Azure does not allow HA Ports rule (protocol=All, port=0) to coexist
-# with specific port rules (HTTP:80, HTTPS:443) on the same frontend IP.
-# For full NVA functionality requiring all ports, would need:
-# - Separate frontend IP configuration for HA ports, OR
-# - Remove HTTP/HTTPS specific rules and use HA ports only
-# Current implementation uses specific port rules for HTTP/HTTPS traffic.
